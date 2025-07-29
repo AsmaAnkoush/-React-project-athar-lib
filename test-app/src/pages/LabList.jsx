@@ -1,9 +1,13 @@
 import React, { useState } from 'react';
-
 const labs = [
     { code: "ENEE3112", name: "Electronics Lab", link: "https://drive.google.com/drive/u/0/folders/1WC4yrdqRAJhZjvNQFlL4C8ft-qAPMmtZ" },
     { code: "ENEE2102", name: "Circuits Lab", link: "https://drive.google.com/drive/u/0/folders/1EfB28OjAevjdrm_9E7JcKPh4n8DmHXqX" },
+    { code: "ENEE4202", name: "Electrical Installation Lab (تمديدات)", link: "https://drive.google.com/drive/u/0/folders/1ttluHpiHqLjj6N42Kw40XhwQrSA-MfXm" },
+    { code: "ENEE4113", name: "Communications Lab", link: "https://drive.google.com/drive/u/0/folders/11-SZXLAw23wfQrkp62yWq_C3vyaTtIfA" },
+    { code: "ENEE3101", name: "Machine Lab", link: "https://drive.google.com/drive/u/0/folders/1PRTBJHQ2j0b7J-76JSzdCpcExhOn1To-" },
+    { code: "ENCS2110", name: "Digital Lab", link: "https://drive.google.com/drive/u/0/folders/1Zgkuzsgf95CvNTNJSD6viqCpA5_3zcj_" },
 ];
+
 
 export default function LabsPage() {
     const [search, setSearch] = useState("");
