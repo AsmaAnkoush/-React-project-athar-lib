@@ -4,6 +4,7 @@ import { useState } from "react";
 export default function Hero() {
     const [showModal, setShowModal] = useState(false);
     const [activeGroup, setActiveGroup] = useState("");
+    const [showPoster, setShowPoster] = useState(false);
 
     const handleOpenModal = (group) => {
         setActiveGroup(group);
@@ -108,15 +109,14 @@ export default function Hero() {
                     </div>
                 </div>
 
+                {/* الفوتر */}
                 <p className="text-xs text-gray-500 mt-6">© 2025 - ElecLib</p>
             </div>
 
-            {/* البوكس المنبثق */}
+            {/* المودال للمجموعة */}
             {showModal && activeGroup && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
                     <div className="bg-white rounded-xl shadow-lg p-6 pt-8 relative max-w-sm w-full text-center text-gray-800 space-y-4">
-
-                        {/* زر الإغلاق على اليسار */}
                         <button
                             onClick={() => setShowModal(false)}
                             className="absolute top-2 left-2 text-gray-500 hover:text-red-600 text-xl font-bold"
@@ -128,14 +128,45 @@ export default function Hero() {
                             {groupInfo[activeGroup].title}
                         </h2>
                         <p>{groupInfo[activeGroup].description}</p>
-                        <a
-                            href={groupInfo[activeGroup].link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-block mt-2 bg-blue-600 text-white px-4 py-2 rounded-full hover:bg-blue-700 transition animate-pulse"
+
+                        {/* الزرين تحت بعض */}
+                        <div className="flex flex-col items-center gap-3">
+                            {activeGroup === "needs" && (
+                                <button
+                                    onClick={() => setShowPoster(true)}
+                                    className="w-full bg-blue-600 text-white px-4 py-2 rounded-full hover:bg-blue-700 transition animate-pulse"
+                                >
+                                    البوست التعريفي
+                                </button>
+                            )}
+                            <a
+                                href={groupInfo[activeGroup].link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="w-full bg-blue-600 text-white px-4 py-2 rounded-full hover:bg-blue-700 transition animate-pulse text-center"
+                            >
+                                {groupInfo[activeGroup].buttonText}
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* المودال للصورة */}
+            {showPoster && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-4">
+                    <div className="bg-white rounded-xl shadow-xl overflow-hidden relative max-w-md w-full">
+                        <button
+                            onClick={() => setShowPoster(false)}
+                            className="absolute top-2 left-2 text-black text-xl font-bold hover:text-red-600"
                         >
-                            {groupInfo[activeGroup].buttonText}
-                        </a>
+                            ✖
+                        </button>
+                        <img
+                            src="/poster.jpg"
+                            alt="البوست التعريفي"
+                            className="w-full h-auto object-cover"
+                        />
                     </div>
                 </div>
             )}
