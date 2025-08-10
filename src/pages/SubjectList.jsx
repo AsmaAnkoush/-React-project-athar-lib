@@ -1,9 +1,9 @@
-import React, { useState } from 'react'; // ✅ الصحيح
+import React, { useState } from 'react';
 
 const subjects = [
     { code: "ENEE3308", name: "DYNAMICS", link: "https://drive.google.com/drive/u/0/folders/1606mxMKApRuLaxqPu7ERMH_bBXA3wYNc" },
     { code: "ENEE2313", name: "Elctronics 1", link: "https://drive.google.com/drive/u/0/folders/1vnjBVs_2jSJzTIQkqGoCbUJysMumkT_J" },
-    { code: "ENEE3304", name: "FEflctronics 2", link: "https://drive.google.com/drive/u/0/folders/1jZhd2gohbrToLkIkoSkBJwrzTOP3eYXd" },
+    { code: "ENEE3304", name: "Elctronics 2", link: "https://drive.google.com/drive/u/0/folders/1jZhd2gohbrToLkIkoSkBJwrzTOP3eYXd" },
     { code: "ENEE4403", name: "Power System", link: "https://drive.google.com/drive/u/0/folders/10eRLSROCWBJeQSSjxRlzcHBouZK_DwYg" },
     { code: "ENEE3309", name: "Communication Systems 1", link: "https://drive.google.com/drive/u/0/folders/1dNrZn8bOqgS7E2EA05cIG-Zpb3v7UuCD" },
     { code: "ENEE3401", name: "Communication Systems 2", link: "https://drive.google.com/drive/u/0/folders/1GyFl5GmeMdEPfW_z0XkPO_6wzXt9d5V2" },
