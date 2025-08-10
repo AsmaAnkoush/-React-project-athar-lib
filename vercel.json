@@ -1,0 +1,5 @@
+{
+  "version": 2,
+  "builds": [{ "src": "test-app/package.json", "use": "@vercel/static-build" }],
+  "routes": [{ "src": "/(.*)", "dest": "test-app/build/index.html" }]
+}
