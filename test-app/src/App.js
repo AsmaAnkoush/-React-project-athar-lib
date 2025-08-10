@@ -2,7 +2,6 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Hero from './components/Hero';
 import MaterialsPage from './pages/SubjectList';
 import LabsPage from './pages/LabList';
-import AllSubjects from "./components/AllSubjects";
 
 function App() {
     return (
@@ -12,7 +11,6 @@ function App() {
                     <Route path="/" element={<Hero />} />
                     <Route path="/subjects" element={<MaterialsPage />} />
                     <Route path="/labs" element={<LabsPage />} />
-                    <Route path="/all-subjects" element={<AllSubjects />} />
                 </Routes>
             </main>
         </BrowserRouter>
