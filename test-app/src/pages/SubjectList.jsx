@@ -230,6 +230,7 @@ export default function AllSubjects() {
                             <ul className="mt-5 space-y-3">
                                 <AnimatePresence>
                                     {items.map((f) => {
+                                        const canDownload = getDownloadLink(f);
                                         const { Icon, tone } = pickIcon({ mime: f.mimeType, isFolderFlag: isFolder(f.mimeType), name: f.name });
                                         const isDir = isFolder(f.mimeType);
 
