@@ -67,17 +67,18 @@ export default function Hero() {
 
                 {/* روابط */}
                 <div className="flex flex-col sm:flex-row justify-center gap-4">
-                    <Link
-                        to="/labs"
-                        className="inline-block bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 px-10 rounded-full shadow-lg text-lg transition transform hover:scale-105"
-                    >
-                        Labs
-                    </Link>
+
                     <Link
                         to="/subjects"
                         className="inline-block bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 px-10 rounded-full shadow-lg text-lg transition transform hover:scale-105"
                     >
                         Cources
+                    </Link>
+                    <Link
+                        to="/labs"
+                        className="inline-block bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 px-10 rounded-full shadow-lg text-lg transition transform hover:scale-105"
+                    >
+                        Labs
                     </Link>
                 </div>
 
