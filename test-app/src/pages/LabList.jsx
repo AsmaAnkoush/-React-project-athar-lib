@@ -98,6 +98,13 @@ export default function LabsPage() {
     const [loading, setLoading] = useState(false);
     const [err, setErr] = useState("");
     const [preview, setPreview] = useState(null);
+    function resetAll() {
+        setSelectedLab(null);
+        setPathStack([]);
+        setItems([]);
+        setErr("");
+        setPreview(null);
+    }
 
     // filter + highlight
     const labsList = useMemo(() => {
@@ -108,18 +115,16 @@ export default function LabsPage() {
         );
     }, [search]);
 
-    // back-stack behavior
     useEffect(() => {
-        window.history.replaceState({ type: "root", depth: 0 }, "");
         const onPop = () => {
             if (preview) { setPreview(null); return; }
-            if (pathStack.length > 1) { setPathStack((p) => p.slice(0, -1)); return; }
-            if (selectedSubject) { resetAll(); return; }
-            // عند الجذر، المتصفح يكمل الرجوع طبيعيًا
+            if (pathStack.length > 1) { setPathStack(p => p.slice(0, -1)); return; }
+            if (selectedLab) { resetAll(); return; }
         };
         window.addEventListener("popstate", onPop);
         return () => window.removeEventListener("popstate", onPop);
     }, [preview, pathStack.length, selectedLab]);
+
 
     function handleSelectLab(lab) {
         const id = getFolderId(lab.link);
@@ -178,7 +183,6 @@ export default function LabsPage() {
     }
     // =================================
 
-    function resetAll() { setSelectedLab(null); setPathStack([]); setItems([]); setErr(""); setPreview(null); }
 
     // image navigation in preview
     const imageItems = useMemo(() => items.filter((f) => isImageFile(f)), [items]);

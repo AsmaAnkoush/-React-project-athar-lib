@@ -119,7 +119,13 @@ export default function AllSubjects() {
     const [loading, setLoading] = useState(false);
     const [err, setErr] = useState("");
     const [preview, setPreview] = useState(null);
-
+    function resetAll() {
+        setSelectedSubject(null);
+        setPathStack([]);
+        setItems([]);
+        setErr("");
+        setPreview(null);
+    }
     const subjectsList = useMemo(() => {
         const q = search.trim().toLowerCase();
         if (!q) return subjects;
@@ -135,10 +141,10 @@ export default function AllSubjects() {
         window.history.replaceState({ type: "root", depth: 0 }, "");
         const onPop = () => {
             if (preview) { setPreview(null); return; }
-            if (pathStack.length > 1) { setPathStack((p) => p.slice(0, -1)); return; }
-            if (selectedLab) { resetAll(); return; }
-            // لو كنا على صفحة المواد (الجذر) المتصفح سيكمل الرجوع طبيعيًا للصفحة السابقة
+            if (pathStack.length > 1) { setPathStack(p => p.slice(0, -1)); return; }
+            if (selectedSubject) { resetAll(); return; } // <— مو selectedLab
         };
+
         window.addEventListener("popstate", onPop);
         return () => window.removeEventListener("popstate", onPop);
     }, [preview, pathStack.length, selectedSubject]);
@@ -201,7 +207,6 @@ export default function AllSubjects() {
     }
     // ================================
 
-    function resetAll() { setSelectedSubject(null); setPathStack([]); setItems([]); setErr(""); setPreview(null); } // احتفظنا فيها لو حبيت تستخدمها لاحقًا
 
     // preview image navigation
     const imageItems = useMemo(() => items.filter((f) => isImageFile(f)), [items]);
