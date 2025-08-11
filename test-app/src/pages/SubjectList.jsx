@@ -5,6 +5,8 @@ import {
     FileArchive, FileSpreadsheet, FileAudio2, FileVideo2, Presentation,
     X, Zap, ChevronLeft, ChevronRight
 } from "lucide-react";
+import { FiArrowLeft } from "react-icons/fi";
+
 
 // Google API Key (public folders required)
 const API_KEY = "AIzaSyA_yt7VNybzoM2GNsqgl196TefA8uT33Qs";
@@ -269,9 +271,10 @@ export default function AllSubjects() {
                         <div className="flex flex-wrap items-center gap-3">
                             <button
                                 onClick={resetAll}
-                                className="px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition"
+                                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition"
                             >
-                                ← All Subjects
+                                <FiArrowLeft className="text-lg" />
+                                All Subjects
                             </button>
                             <h3 className="text-xl font-semibold text-sky-300">
                                 {selectedSubject.code} – {selectedSubject.name}

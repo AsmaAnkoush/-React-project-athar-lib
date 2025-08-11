@@ -5,6 +5,8 @@ import {
     FileArchive, FileSpreadsheet, FileAudio2, FileVideo2, Presentation,
     X, Zap, ChevronLeft, ChevronRight
 } from "lucide-react";
+import { FiArrowLeft } from "react-icons/fi";
+
 
 const API_KEY = "AIzaSyA_yt7VNybzoM2GNsqgl196TefA8uT33Qs";
 
@@ -241,9 +243,12 @@ export default function LabsPage() {
                     <motion.div className="bg-white/5 rounded-2xl p-4 md:p-6 border border-white/10 shadow-xl mt-4"
                                 initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
                         <div className="flex flex-wrap items-center gap-3">
-                            <button onClick={resetAll}
-                                    className="px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition">
-                                ← All Labs
+                            <button
+                                onClick={resetAll}
+                                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition"
+                            >
+                                <FiArrowLeft className="text-lg" />
+                                All Labs
                             </button>
                             <h3 className="text-xl font-semibold text-sky-300">
                                 {selectedLab.code} – {selectedLab.name}
