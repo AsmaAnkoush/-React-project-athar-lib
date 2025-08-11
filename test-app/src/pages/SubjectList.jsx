@@ -136,7 +136,7 @@ export default function AllSubjects() {
         const onPop = () => {
             if (preview) { setPreview(null); return; }
             if (pathStack.length > 1) { setPathStack((p) => p.slice(0, -1)); return; }
-            if (selectedSubject) { setSelectedSubject(null); setPathStack([]); return; }
+            if (selectedLab) { resetAll(); return; }
             // لو كنا على صفحة المواد (الجذر) المتصفح سيكمل الرجوع طبيعيًا للصفحة السابقة
         };
         window.addEventListener("popstate", onPop);

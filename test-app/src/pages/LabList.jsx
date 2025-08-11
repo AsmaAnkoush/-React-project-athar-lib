@@ -114,7 +114,7 @@ export default function LabsPage() {
         const onPop = () => {
             if (preview) { setPreview(null); return; }
             if (pathStack.length > 1) { setPathStack((p) => p.slice(0, -1)); return; }
-            if (selectedLab) { setSelectedLab(null); setPathStack([]); return; }
+            if (selectedSubject) { resetAll(); return; }
             // عند الجذر، المتصفح يكمل الرجوع طبيعيًا
         };
         window.addEventListener("popstate", onPop);
