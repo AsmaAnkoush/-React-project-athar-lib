@@ -137,6 +137,7 @@ export default function AllSubjects() {
             if (preview) { setPreview(null); return; }
             if (pathStack.length > 1) { setPathStack((p) => p.slice(0, -1)); return; }
             if (selectedSubject) { setSelectedSubject(null); setPathStack([]); return; }
+            // لو كنا على صفحة المواد (الجذر) المتصفح سيكمل الرجوع طبيعيًا للصفحة السابقة
         };
         window.addEventListener("popstate", onPop);
         return () => window.removeEventListener("popstate", onPop);
@@ -182,7 +183,25 @@ export default function AllSubjects() {
         window.history.pushState({ type: "folder" }, "");
     }
     function goToLevel(index) { setPathStack((prev) => prev.slice(0, index + 1)); }
-    function resetAll() { setSelectedSubject(null); setPathStack([]); setItems([]); setErr(""); setPreview(null); }
+
+    // ======= NEW: Back helpers =======
+    // رجوع خطوة للخلف (المتصفح/الهاتف)
+    function backOutOne() {
+        if (window.history.length > 1) {
+            window.history.back();
+        }
+    }
+    // رجوع من متصفح المجلدات إلى صفحة المواد باستخدام عدد حالات التاريخ
+    function backToSubjects() {
+        if (pathStack.length > 0) {
+            window.history.go(-pathStack.length);
+        } else {
+            backOutOne();
+        }
+    }
+    // ================================
+
+    function resetAll() { setSelectedSubject(null); setPathStack([]); setItems([]); setErr(""); setPreview(null); } // احتفظنا فيها لو حبيت تستخدمها لاحقًا
 
     // preview image navigation
     const imageItems = useMemo(() => items.filter((f) => isImageFile(f)), [items]);
@@ -205,6 +224,21 @@ export default function AllSubjects() {
                 <h2 className="text-3xl md:text-4xl font-extrabold text-center text-yellow-400 mb-8 drop-shadow">
                     Electrical Engineering Courses
                 </h2>
+
+                {/* NEW: Back button on the subjects root page */}
+                {!selectedSubject && (
+                    <div className="mb-4 flex justify-start">
+                        <button
+                            onClick={backOutOne}
+                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition"
+                            aria-label="رجوع"
+                            title="رجوع"
+                        >
+                            <FiArrowLeft className="text-lg" />
+                            <span>Go Back</span>
+                        </button>
+                    </div>
+                )}
 
                 {/* Search (subjects) */}
                 {!selectedSubject && (
@@ -270,7 +304,7 @@ export default function AllSubjects() {
                     >
                         <div className="flex flex-wrap items-center gap-3">
                             <button
-                                onClick={resetAll}
+                                onClick={backToSubjects}
                                 className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition"
                             >
                                 <FiArrowLeft className="text-lg" />
@@ -363,8 +397,6 @@ export default function AllSubjects() {
                                     </AnimatePresence>
                                 </ul>
 
-                                {/* Gaza banner */}
-                                {/* Gaza banner (Arabic, RTL) */}
                                 {/* Gaza banner (Arabic, RTL, Highlighted) */}
                                 <div className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm leading-relaxed text-slate-100" dir="rtl">
                                     <div className="text-yellow-300 font-semibold mb-2 text-center">
@@ -375,8 +407,6 @@ export default function AllSubjects() {
                                         اللهم يا رحيم، يا قوي، يا جبار، كن لأهل غزة عونًا ونصيرًا، اللهم احفظهم بحفظك، وأمنهم بأمانك، واشفِ جرحاهم، وتقبل شهداءهم، واربط على قلوبهم، وأبدل خوفهم أمنًا، وحزنهم فرحًا، وضعفهم قوة، اللهم عجّل لهم بالفرج والنصر المبين، واجعل كيد عدوهم في نحورهم، إنك وليُّ ذلكَ والقادر عليه.
                                     </p>
                                 </div>
-
-
                             </>
                         )}
                     </motion.div>
@@ -441,3 +471,6 @@ export default function AllSubjects() {
         </main>
     );
 }
+
+// لمن يكون فاتح صفحة المواد و يرجع باك , طواله رجعه ع الصفحة الي قبلها ,
+// وضيف صفحة عند المواد ايقونة ترجع للصفحة الي قبلها , يعني اما برجع من باك التلفون او من الايقونة

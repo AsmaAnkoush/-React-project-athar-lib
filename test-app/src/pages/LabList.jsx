@@ -7,7 +7,6 @@ import {
 } from "lucide-react";
 import { FiArrowLeft } from "react-icons/fi";
 
-
 const API_KEY = "AIzaSyA_yt7VNybzoM2GNsqgl196TefA8uT33Qs";
 
 const labs = [
@@ -109,13 +108,14 @@ export default function LabsPage() {
         );
     }, [search]);
 
-    // back-stack behavior (like subjects page)
+    // back-stack behavior
     useEffect(() => {
         window.history.replaceState({ type: "root", depth: 0 }, "");
         const onPop = () => {
             if (preview) { setPreview(null); return; }
             if (pathStack.length > 1) { setPathStack((p) => p.slice(0, -1)); return; }
             if (selectedLab) { setSelectedLab(null); setPathStack([]); return; }
+            // عند الجذر، المتصفح يكمل الرجوع طبيعيًا
         };
         window.addEventListener("popstate", onPop);
         return () => window.removeEventListener("popstate", onPop);
@@ -162,6 +162,22 @@ export default function LabsPage() {
         window.history.pushState({ type: "folder" }, "");
     }
     function goToLevel(index) { setPathStack((prev) => prev.slice(0, index + 1)); }
+
+    // ======= NEW: Back helpers =======
+    function backOutOne() {
+        if (window.history.length > 1) {
+            window.history.back();
+        }
+    }
+    function backToLabs() {
+        if (pathStack.length > 0) {
+            window.history.go(-pathStack.length);
+        } else {
+            backOutOne();
+        }
+    }
+    // =================================
+
     function resetAll() { setSelectedLab(null); setPathStack([]); setItems([]); setErr(""); setPreview(null); }
 
     // image navigation in preview
@@ -183,6 +199,21 @@ export default function LabsPage() {
                 <h2 className="text-3xl md:text-4xl font-extrabold text-center text-yellow-400 mb-8 drop-shadow">
                     Electrical Engineering Labs
                 </h2>
+
+                {/* NEW: Back button on the labs root page */}
+                {!selectedLab && (
+                    <div className="mb-4 flex justify-start">
+                        <button
+                            onClick={backOutOne}
+                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition"
+                            aria-label="Go Back"
+                            title="Go Back"
+                        >
+                            <FiArrowLeft className="text-lg" />
+                            <span>Go Back</span>
+                        </button>
+                    </div>
+                )}
 
                 {/* Search (labs) */}
                 {!selectedLab && (
@@ -244,7 +275,7 @@ export default function LabsPage() {
                                 initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
                         <div className="flex flex-wrap items-center gap-3">
                             <button
-                                onClick={resetAll}
+                                onClick={backToLabs}
                                 className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition"
                             >
                                 <FiArrowLeft className="text-lg" />
@@ -341,7 +372,6 @@ export default function LabsPage() {
                                     </AnimatePresence>
                                 </ul>
 
-                                {/* Gaza banner */}
                                 {/* Gaza banner (Arabic, RTL) */}
                                 <div className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm leading-relaxed text-slate-100" dir="rtl">
                                     <div className="text-yellow-300 font-semibold mb-2 text-center">
