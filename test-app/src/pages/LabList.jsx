@@ -189,7 +189,7 @@ export default function LabsPage() {
                             type="text"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            placeholder="Search by code or name…"
+                            placeholder="Search by code or lab name…"
                             className="w-full max-w-md px-5 py-3 rounded-full text-sm bg-white/10 placeholder-white/80 text-white border border-white/20 focus:outline-none focus:ring-2 focus:ring-sky-500 shadow-lg"
                         />
                     </div>
@@ -339,11 +339,12 @@ export default function LabsPage() {
                                 {/* Gaza banner */}
                                 {/* Gaza banner (Arabic, RTL) */}
                                 <div className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm leading-relaxed text-slate-100" dir="rtl">
-                                    <div className="text-yellow-300 font-semibold mb-2">
+                                    <div className="text-yellow-300 font-semibold mb-2 text-center">
                                         وأنت بتدرس، لا تنسى أهلنا في غزة
                                     </div>
+
                                     <p className="whitespace-pre-line">
-                                        اللهم يا رحيم، يا قوي، يا جبار، كن لأهل غزة عونًا ونصيرًا، اللهم احفظهم بحفظك، وأمنهم بأمانك، واشفِ جرحاهم، وتقبل شهداءهم، واربط على قلوبهم، وأبدل خوفهم أمنًا، وحزنهم فرحًا، وضعفهم قوة، اللهم عجّل لهم بالفرج والنصر المبين، واجعل كيد عدوهم في نحورهم، إنك وليّ ذلكَ والقادر عليه.
+                                        اللهم يا رحيم، يا قوي، يا جبار، كن لأهل غزة عونًا ونصيرًا، اللهم احفظهم بحفظك، وأمنهم بأمانك، واشفِ جرحاهم، وتقبل شهداءهم، واربط على قلوبهم، وأبدل خوفهم أمنًا، وحزنهم فرحًا، وضعفهم قوة، اللهم عجّل لهم بالفرج والنصر المبين، واجعل كيد عدوهم في نحورهم، إنك وليُّ ذلكَ والقادر عليه.
                                     </p>
                                 </div>
 
