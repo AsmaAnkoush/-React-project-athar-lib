@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     FolderOpen, File, FileText, FileCode, Image as ImageIcon,
-    FileArchive, FileSpreadsheet, FileAudio2, FileVideo2, Presentation, X
+    FileArchive, FileSpreadsheet, FileAudio2, FileVideo2, Presentation,
+    X, Zap, ChevronLeft, ChevronRight
 } from "lucide-react";
 
 // Google API Key (public folders required)
@@ -43,6 +44,9 @@ function getFolderId(link) {
     return m?.[1] ?? null;
 }
 const isFolder = (mime) => mime === "application/vnd.google-apps.folder";
+const isImageFile = (f) =>
+    f?.mimeType?.startsWith("image/") || /\.(png|jpe?g|gif|webp|svg)$/i.test((f?.name || "").toLowerCase());
+
 function fileTypeLabel(f) {
     if (isFolder(f.mimeType)) return "Folder";
     const n = (f.name || "").toLowerCase();
@@ -50,7 +54,7 @@ function fileTypeLabel(f) {
     return ext.toUpperCase();
 }
 function getDownloadLink(file) {
-    if (file.webContentLink) return file.webContentLink; // normal files
+    if (file.webContentLink) return file.webContentLink;
     const isGoogleDoc = file.mimeType?.startsWith("application/vnd.google-apps");
     if (isGoogleDoc) {
         return `https://www.googleapis.com/drive/v3/files/${file.id}/export?mimeType=${encodeURIComponent("application/pdf")}&key=${API_KEY}`;
@@ -72,8 +76,27 @@ function pickIcon({ mime, isFolderFlag, name = "" }) {
     return { Icon: File, tone: "bg-slate-500/20 text-slate-300" };
 }
 
-/* Skeleton */
-function RowSkeleton(){
+/* highlight helper */
+function highlightMatch(text, query) {
+    if (!query) return text;
+    const q = query.trim();
+    if (!q) return text;
+    const regex = new RegExp(`(${escapeRegExp(q)})`, "ig");
+    const parts = String(text).split(regex);
+    return parts.map((part, i) =>
+        regex.test(part) ? (
+            <span key={i} className="bg-yellow-400/40 text-yellow-100 px-1 rounded">{part}</span>
+        ) : (
+            <span key={i}>{part}</span>
+        )
+    );
+}
+function escapeRegExp(str) {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/* Skeleton row */
+function RowSkeleton() {
     return (
         <div className="rounded-2xl p-4 border border-white/10 bg-white/5 flex items-center gap-4 animate-pulse">
             <div className="w-12 h-12 rounded-2xl bg-white/10" />
@@ -87,32 +110,51 @@ function RowSkeleton(){
 }
 
 export default function AllSubjects() {
+    const [search, setSearch] = useState("");
     const [selectedSubject, setSelectedSubject] = useState(null);
     const [pathStack, setPathStack] = useState([]); // [{id,name}]
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(false);
     const [err, setErr] = useState("");
-    const [preview, setPreview] = useState(null); // {file}
+    const [preview, setPreview] = useState(null);
 
-    const subjectsList = useMemo(() => subjects, []);
+    const subjectsList = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        if (!q) return subjects;
+        return subjects.filter(
+            (s) =>
+                s.code.toLowerCase().includes(q) ||
+                s.name.toLowerCase().includes(q)
+        );
+    }, [search]);
+
+    // history/back behavior
+    useEffect(() => {
+        window.history.replaceState({ type: "root", depth: 0 }, "");
+        const onPop = () => {
+            if (preview) { setPreview(null); return; }
+            if (pathStack.length > 1) { setPathStack((p) => p.slice(0, -1)); return; }
+            if (selectedSubject) { setSelectedSubject(null); setPathStack([]); return; }
+        };
+        window.addEventListener("popstate", onPop);
+        return () => window.removeEventListener("popstate", onPop);
+    }, [preview, pathStack.length, selectedSubject]);
 
     function handleSelectSubject(subj) {
         const id = getFolderId(subj.link);
         if (!id) return;
         setSelectedSubject(subj);
         setPathStack([{ id, name: subj.name }]);
+        window.history.pushState({ type: "subject" }, "");
     }
 
     useEffect(() => {
         async function fetchFolder() {
             if (!pathStack.length) return;
-            setLoading(true);
-            setErr("");
+            setLoading(true); setErr("");
             const currentId = pathStack[pathStack.length - 1].id;
             const q = encodeURIComponent(`'${currentId}' in parents and trashed=false`);
-            const fields = encodeURIComponent(
-                "files(id,name,mimeType,modifiedTime,webViewLink,webContentLink)"
-            );
+            const fields = encodeURIComponent("files(id,name,mimeType,modifiedTime,webViewLink,webContentLink)");
             const url = `https://www.googleapis.com/drive/v3/files?q=${q}&key=${API_KEY}&fields=${fields}&pageSize=1000&orderBy=folder,name_natural`;
             try {
                 const res = await fetch(url);
@@ -124,7 +166,7 @@ export default function AllSubjects() {
                     return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
                 });
                 setItems(files);
-            } catch (e) {
+            } catch {
                 setErr("Failed to load from Google Drive. Check Public/Key.");
             } finally {
                 setLoading(false);
@@ -135,17 +177,21 @@ export default function AllSubjects() {
 
     function openFolder(folder) {
         setPathStack((prev) => [...prev, { id: folder.id, name: folder.name }]);
+        window.history.pushState({ type: "folder" }, "");
     }
-    function goToLevel(index) {
-        setPathStack((prev) => prev.slice(0, index + 1));
-    }
-    function resetAll() {
-        setSelectedSubject(null);
-        setPathStack([]);
-        setItems([]);
-        setErr("");
-        setPreview(null);
-    }
+    function goToLevel(index) { setPathStack((prev) => prev.slice(0, index + 1)); }
+    function resetAll() { setSelectedSubject(null); setPathStack([]); setItems([]); setErr(""); setPreview(null); }
+
+    // preview image navigation
+    const imageItems = useMemo(() => items.filter((f) => isImageFile(f)), [items]);
+    const navImage = (dir) => {
+        if (!preview) return;
+        const arr = imageItems;
+        const idx = arr.findIndex((x) => x.id === preview.id);
+        if (idx === -1) return;
+        const next = dir === "prev" ? (idx - 1 + arr.length) % arr.length : (idx + 1) % arr.length;
+        setPreview(arr[next]);
+    };
 
     return (
         <main
@@ -154,30 +200,60 @@ export default function AllSubjects() {
         >
             <div className="absolute inset-0 bg-[#0f172a]/85 backdrop-blur-sm z-0" />
             <div className="relative z-10 w-full max-w-6xl text-white">
-                <h2 className="text-3xl md:text-4xl font-extrabold text-center text-yellow-400 mb-10 drop-shadow">
+                <h2 className="text-3xl md:text-4xl font-extrabold text-center text-yellow-400 mb-8 drop-shadow">
                     Electrical Engineering Courses
                 </h2>
 
-                {/* Subjects grid (no search) */}
+                {/* Search (subjects) */}
+                {!selectedSubject && (
+                    <div className="mb-6 flex justify-center">
+                        <input
+                            type="text"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder="Search by code or name…"
+                            className="w-full max-w-md px-5 py-3 rounded-full text-sm bg-white/10 placeholder-white/80 text-white border border-white/20 focus:outline-none focus:ring-2 focus:ring-sky-500 shadow-lg"
+                        />
+                    </div>
+                )}
+
+                {/* Subjects grid */}
                 {!selectedSubject && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
                         <AnimatePresence>
-                            {subjectsList.map((subj) => (
-                                <motion.button
-                                    key={subj.code + subj.name}
-                                    onClick={() => handleSelectSubject(subj)}
-                                    className="group text-left block w-full"
-                                    initial={{ opacity: 0, y: 8 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, y: -8 }}
-                                    transition={{ duration: 0.2 }}
-                                >
-                                    <div className="bg-gradient-to-br from-[#1e293b] to-[#0f172a] text-white rounded-2xl p-5 shadow-lg border border-white/10 backdrop-blur-md transition-transform duration-200 group-hover:scale-[1.03] hover:border-sky-500">
-                                        <h4 className="font-bold text-sky-300 text-base mb-1">{subj.code}</h4>
-                                        <p className="text-slate-200 text-sm">{subj.name}</p>
-                                    </div>
-                                </motion.button>
-                            ))}
+                            {subjectsList.map((subj) => {
+                                const q = search.trim();
+                                return (
+                                    <motion.button
+                                        key={subj.code + subj.name}
+                                        onClick={() => handleSelectSubject(subj)}
+                                        className="group text-left block w-full"
+                                        initial={{ opacity: 0, y: 8 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -8 }}
+                                        transition={{ duration: 0.2 }}
+                                    >
+                                        <div className="bg-gradient-to-br from-[#1e293b] to-[#0f172a] text-white rounded-2xl p-5 shadow-lg border border-white/10 backdrop-blur-md transition-transform duration-200 group-hover:scale-[1.03] hover:border-sky-500 flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-xl bg-yellow-500/20 text-yellow-400 grid place-items-center shadow-inner">
+                                                <Zap size={18} />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <h4 className="font-bold text-sky-300 text-base mb-0.5">
+                                                    {highlightMatch(subj.code, q)}
+                                                </h4>
+                                                <p className="text-slate-200 text-sm truncate">
+                                                    {highlightMatch(subj.name, q)}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </motion.button>
+                                );
+                            })}
+                            {subjectsList.length === 0 && (
+                                <p className="text-center col-span-full text-slate-400 text-sm mt-4">
+                                    No subjects found.
+                                </p>
+                            )}
                         </AnimatePresence>
                     </div>
                 )}
@@ -185,7 +261,7 @@ export default function AllSubjects() {
                 {/* Folder browser */}
                 {selectedSubject && (
                     <motion.div
-                        className="bg-white/5 rounded-2xl p-4 md:p-6 border border-white/10 shadow-xl"
+                        className="bg-white/5 rounded-2xl p-4 md:p-6 border border-white/10 shadow-xl mt-4"
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.25 }}
@@ -220,64 +296,84 @@ export default function AllSubjects() {
                         {/* States */}
                         {loading && (
                             <div className="mt-6 space-y-3">
-                                <RowSkeleton/><RowSkeleton/><RowSkeleton/><RowSkeleton/>
+                                <RowSkeleton /><RowSkeleton /><RowSkeleton /><RowSkeleton />
                             </div>
                         )}
                         {err && <p className="text-red-300 text-sm mt-6">{err}</p>}
 
-                        {/* Items list: click row = Quick Preview (file) / open (folder) */}
+                        {/* Items */}
                         {!loading && !err && (
-                            <ul className="mt-5 space-y-3">
-                                <AnimatePresence>
-                                    {items.map((f) => {
-                                        const { Icon, tone } = pickIcon({ mime: f.mimeType, isFolderFlag: isFolder(f.mimeType), name: f.name });
-                                        const isDir = isFolder(f.mimeType);
-
-                                        const onClick = () => {
-                                            if (isDir) openFolder(f);
-                                            else setPreview(f);
-                                        };
-
-                                        return (
-                                            <motion.li
-                                                key={f.id}
-                                                onClick={onClick}
-                                                className={`rounded-2xl bg-gradient-to-br from-[#0b1224] to-[#0a1020] border border-white/10 p-4 flex items-center gap-4 transition hover:border-sky-500 cursor-pointer`}
-                                                initial={{ opacity: 0, y: 6 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                exit={{ opacity: 0, y: -6 }}
-                                            >
-                                                <div className={`w-12 h-12 rounded-2xl grid place-items-center ${tone} shadow-inner`}>
-                                                    <Icon size={22}/>
-                                                </div>
-
-                                                <div className="flex-1 min-w-0">
-                                                    <h4 className="text-white text-sm md:text-base font-medium truncate">
-                                                        {f.name}
-                                                    </h4>
-                                                    <div className="text-xs text-slate-400 mt-1">{fileTypeLabel(f)}</div>
-                                                </div>
-
-                                                {!isDir && (
-                                                    <div className="flex items-center gap-2" onClick={(e)=>e.stopPropagation()}>
-                                                        <button
-                                                            onClick={() => setPreview(f)}
-                                                            className="px-3 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs"
-                                                        >
-                                                            Quick Preview
-                                                        </button>
-
+                            <>
+                                <ul className="mt-5 space-y-3">
+                                    <AnimatePresence>
+                                        {items.map((f) => {
+                                            const { Icon, tone } = pickIcon({ mime: f.mimeType, isFolderFlag: isFolder(f.mimeType), name: f.name });
+                                            const isDir = isFolder(f.mimeType);
+                                            const onClick = () => {
+                                                if (isDir) openFolder(f);
+                                                else { setPreview(f); window.history.pushState({ type: "preview" }, ""); }
+                                            };
+                                            return (
+                                                <motion.li
+                                                    key={f.id}
+                                                    onClick={onClick}
+                                                    className="rounded-2xl bg-gradient-to-br from-[#0b1224] to-[#0a1020] border border-white/10 p-4 transition hover:border-sky-500 cursor-pointer"
+                                                    initial={{ opacity: 0, y: 6 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    exit={{ opacity: 0, y: -6 }}
+                                                >
+                                                    <div className="flex gap-4">
+                                                        <div className={`w-12 h-12 rounded-2xl grid place-items-center ${tone} shadow-inner shrink-0`}>
+                                                            <Icon size={22} />
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <h4 className="text-white text-sm md:text-base font-medium break-words whitespace-normal sm:truncate">
+                                                                {f.name}
+                                                            </h4>
+                                                            <div className="text-xs text-slate-400 mt-1">{fileTypeLabel(f)}</div>
+                                                            {!isDir && (
+                                                                <div className="mt-3 sm:hidden">
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); setPreview(f); window.history.pushState({ type: "preview" }, ""); }}
+                                                                        className="w-full px-3 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs"
+                                                                    >
+                                                                        Quick Preview
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        {!isDir && (
+                                                            <div className="hidden sm:flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                                                <button
+                                                                    onClick={() => { setPreview(f); window.history.pushState({ type: "preview" }, ""); }}
+                                                                    className="px-3 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs"
+                                                                >
+                                                                    Quick Preview
+                                                                </button>
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                )}
-                                            </motion.li>
-                                        );
-                                    })}
+                                                </motion.li>
+                                            );
+                                        })}
+                                        {items.length === 0 && <li className="text-slate-400 text-sm">No items here.</li>}
+                                    </AnimatePresence>
+                                </ul>
 
-                                    {items.length === 0 && (
-                                        <li className="text-slate-400 text-sm">No items here.</li>
-                                    )}
-                                </AnimatePresence>
-                            </ul>
+                                {/* Gaza banner */}
+                                {/* Gaza banner (Arabic, RTL) */}
+                                {/* Gaza banner (Arabic, RTL, Highlighted) */}
+                                <div className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm leading-relaxed text-slate-100" dir="rtl">
+                                    <div className="text-yellow-300 font-semibold mb-2">
+                                        وأنت بتدرس، لا تنسى أهلنا في غزة
+                                    </div>
+                                    <p className="whitespace-pre-line">
+                                        اللهم يا رحيم، يا قوي، يا جبار، كن لأهل غزة عونًا ونصيرًا، اللهم احفظهم بحفظك، وأمنهم بأمانك، واشفِ جرحاهم، وتقبل شهداءهم، واربط على قلوبهم، وأبدل خوفهم أمنًا، وحزنهم فرحًا، وضعفهم قوة، اللهم عجّل لهم بالفرج والنصر المبين، واجعل كيد عدوهم في نحورهم، إنك وليّ ذلكَ والقادر عليه.
+                                    </p>
+                                </div>
+
+
+                            </>
                         )}
                     </motion.div>
                 )}
@@ -293,18 +389,29 @@ export default function AllSubjects() {
                         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                     >
                         <motion.div
-                            className="bg-[#0b1224] border border-white/10 rounded-2xl w-full max-w-4xl overflow-hidden shadow-2xl"
+                            className="relative bg-[#0b1224] border border-white/10 rounded-2xl w-full max-w-4xl overflow-hidden shadow-2xl"
                             initial={{ scale: 0.96, y: 12, opacity: 0 }}
                             animate={{ scale: 1, y: 0, opacity: 1 }}
                             exit={{ scale: 0.96, y: 12, opacity: 0 }}
                         >
                             <div className="flex items-center justify-between p-4 border-b border-white/10">
-                                <div className="text-white font-medium truncate pr-4">{preview.name}</div>
-                                <button className="p-2 rounded-lg bg-white/10 hover:bg-white/20" onClick={()=>setPreview(null)}>
-                                    <X size={16}/>
+                                <div className="text-white font-medium pr-4 whitespace-normal break-words">{preview.name}</div>
+                                <button className="p-2 rounded-lg bg-white/10 hover:bg-white/20" onClick={() => window.history.back()}>
+                                    <X size={16} />
                                 </button>
                             </div>
-                            <div className="bg-[#0a1020] p-3">
+
+                            <div className="relative bg-[#0a1020] p-3">
+                                {isImageFile(preview) && imageItems.length > 1 && (
+                                    <>
+                                        <button onClick={() => navImage("prev")} className="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-xl bg-white/10 hover:bg-white/20">
+                                            <ChevronLeft />
+                                        </button>
+                                        <button onClick={() => navImage("next")} className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-xl bg-white/10 hover:bg-white/20">
+                                            <ChevronRight />
+                                        </button>
+                                    </>
+                                )}
                                 <iframe
                                     title={preview.name}
                                     src={`https://drive.google.com/file/d/${preview.id}/preview`}
@@ -312,17 +419,13 @@ export default function AllSubjects() {
                                     allow="autoplay"
                                 />
                             </div>
+
                             <div className="p-4 flex items-center justify-end gap-2 border-t border-white/10">
-                                <button className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs" onClick={()=>setPreview(null)}>
+                                <button className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs" onClick={() => window.history.back()}>
                                     Close
                                 </button>
                                 {getDownloadLink(preview) && (
-                                    <a
-                                        href={getDownloadLink(preview)}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="px-3 py-2 rounded-xl bg-yellow-500 hover:bg-yellow-600 text-white text-xs"
-                                    >
+                                    <a href={getDownloadLink(preview)} target="_blank" rel="noreferrer" className="px-3 py-2 rounded-xl bg-yellow-500 hover:bg-yellow-600 text-white text-xs">
                                         Download
                                     </a>
                                 )}
