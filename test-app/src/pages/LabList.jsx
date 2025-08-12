@@ -3,9 +3,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
     FolderOpen, File, FileText, FileCode, Image as ImageIcon,
     FileArchive, FileSpreadsheet, FileAudio2, FileVideo2, Presentation,
-    X, Zap, ChevronLeft, ChevronRight
+    X, Zap, ChevronLeft, ChevronRight, Upload
 } from "lucide-react";
 import { FiArrowLeft } from "react-icons/fi";
+const FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdQ6L8wNp28GjRytOy06fmm6knEhDjny0TdLgHi-i1hMeA2tw/viewform";
 
 const API_KEY = "AIzaSyA_yt7VNybzoM2GNsqgl196TefA8uT33Qs";
 
@@ -206,7 +207,7 @@ export default function LabsPage() {
 
                 {/* NEW: Back button on the labs root page */}
                 {!selectedLab && (
-                    <div className="mb-4 flex justify-start">
+                    <div className="mb-4 flex flex-wrap items-center gap-3">
                         <button
                             onClick={backOutOne}
                             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition"
@@ -216,8 +217,20 @@ export default function LabsPage() {
                             <FiArrowLeft className="text-lg" />
                             <span>Go Back</span>
                         </button>
+
+                        <a
+                            href={FORM_URL}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-sm"
+                            title="Upload to Pending"
+                        >
+                            <Upload size={16} />
+                            Upload File
+                        </a>
                     </div>
                 )}
+
 
                 {/* Search (labs) */}
                 {!selectedLab && (

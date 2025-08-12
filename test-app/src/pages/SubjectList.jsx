@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
     FolderOpen, File, FileText, FileCode, Image as ImageIcon,
     FileArchive, FileSpreadsheet, FileAudio2, FileVideo2, Presentation,
-    X, Zap, ChevronLeft, ChevronRight
+    X, Zap, ChevronLeft, ChevronRight, Upload
 } from "lucide-react";
 import { FiArrowLeft } from "react-icons/fi";
 
@@ -38,6 +38,7 @@ const subjects = [
     { code: "ENEE2311", name: "Network Analysis 1", link: "https://drive.google.com/drive/u/0/folders/1_CFlBAcIOxtZxInFVGNU9_BdGypEb7_m" },
     { code: "ENEE2315", name: "Network Analysis 2", link: "https://drive.google.com/drive/u/0/folders/1q2N9G90Cfn9NoCrhssjdXvnv1JvStc6S" },
 ];
+const FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdQ6L8wNp28GjRytOy06fmm6knEhDjny0TdLgHi-i1hMeA2tw/viewform";
 
 /* helpers */
 function getFolderId(link) {
@@ -229,21 +230,33 @@ export default function AllSubjects() {
                 <h2 className="text-3xl md:text-4xl font-extrabold text-center text-yellow-400 mb-8 drop-shadow">
                     Electrical Engineering Courses
                 </h2>
-
-                {/* NEW: Back button on the subjects root page */}
+                {/* شريط علوي في الصفحة الرئيسية */}
                 {!selectedSubject && (
-                    <div className="mb-4 flex justify-start">
+                    <div className="mb-4 flex flex-wrap items-center gap-3">
                         <button
                             onClick={backOutOne}
                             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition"
-                            aria-label="رجوع"
-                            title="رجوع"
+                            aria-label="Go Back"
+                            title="Go Back"
                         >
                             <FiArrowLeft className="text-lg" />
                             <span>Go Back</span>
                         </button>
+
+                        <a
+                            href={FORM_URL}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-sm"
+                            title="Upload to Pending"
+                        >
+                            <Upload size={16} />
+                            Upload File
+                        </a>
                     </div>
                 )}
+
+
 
                 {/* Search (subjects) */}
                 {!selectedSubject && (
@@ -315,6 +328,9 @@ export default function AllSubjects() {
                                 <FiArrowLeft className="text-lg" />
                                 All Subjects
                             </button>
+
+
+
                             <h3 className="text-xl font-semibold text-sky-300">
                                 {selectedSubject.code} – {selectedSubject.name}
                             </h3>
