@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { FiArrowLeft } from "react-icons/fi";
 const FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdQ6L8wNp28GjRytOy06fmm6knEhDjny0TdLgHi-i1hMeA2tw/viewform";
+const KAREEM_FACEBOOK_URL = "https://www.facebook.com/kareem.taha.7146"; // بدّليه برابط كريم الحقيقي
 
 const API_KEY = "AIzaSyA_yt7VNybzoM2GNsqgl196TefA8uT33Qs";
 
@@ -281,6 +282,24 @@ export default function LabsPage() {
                                 <p className="text-center col-span-full text-slate-400 text-sm mt-4">
                                     No labs found.
                                 </p>
+                            )}
+                            {!selectedLab && (
+                                <div className="col-span-full mt-6">
+                                    <p className="w-fit mx-auto text-center text-xs sm:text-sm text-slate-400">
+                                        For suggestions or file submissions, contact{" "}
+                                        <a
+                                            href={KAREEM_FACEBOOK_URL}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-sky-300 hover:text-sky-400 underline"
+                                            title="Open Facebook profile"
+                                        >
+                                            Eng. Kareem Taha
+                                        </a>.
+                                    </p>
+                                </div>
+
+
                             )}
                         </AnimatePresence>
                     </div>
