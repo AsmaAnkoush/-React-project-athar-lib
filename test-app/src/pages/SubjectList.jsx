@@ -29,7 +29,7 @@ const subjects = [
     { code: "ENEE2312", name: "Signals and Systems", link: "https://drive.google.com/drive/u/0/folders/1AiBSH7Qq7d-vpKq5Rf_9r5gHSXS0qlxP" },
     { code: "ENEE3318", name: "Electromagnetics", link: "https://drive.google.com/drive/u/0/folders/1FmZ7aZIoM4uaeaX4eIfQ4hBTDEuN4xVG" },
     { code: "ENCS4308", name: "Microprocessors", link: "https://drive.google.com/drive/u/0/folders/1wUagiWg4AFe4nC1Ve16R4yVF6QimjBgD" },
-    { code: "ENCS2308", name: "Computer Structure and Organization", link: "https://drive.google.com/drive/u/0/folders/1MNiulK2C72dYdSB4YgNnXydCKbGuU1Aa" },
+    { code: "ENCS2308", name: "Computer Organization", link: "https://drive.google.com/drive/u/0/folders/1MNiulK2C72dYdSB4YgNnXydCKbGuU1Aa" },
     { code: "MATH234", name: "Introduction to Linear Algebra", link: "https://drive.google.com/drive/u/0/folders/1xC9GDKU31xS8F31dGBVbgUzewpyNrPQl" },
     { code: "MATH1411", name: "Calculus 1", link: "https://drive.google.com/drive/u/0/folders/1pImx9APzpXOhRyC5rlQeSJCTvwIbJ2Dl" },
     { code: "MATH2311", name: "Calculus 3", link: "https://drive.google.com/drive/u/0/folders/1-H0EXSPSHWTX_YtYU1vuW55eoXW1ZNVa" },
