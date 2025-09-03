@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     FolderOpen, File, FileText, FileCode, Image as ImageIcon,
@@ -222,14 +222,15 @@ export default function AllSubjects() {
 
     // ===== Preview navigation (keyboard for all files) =====
     const previewableItems = useMemo(() => items.filter((f) => !isFolder(f.mimeType)), [items]);
-    const navAny = (dir) => {
+    const navAny = useCallback((dir) => {
         if (!preview) return;
         const arr = previewableItems;
         const idx = arr.findIndex((x) => x.id === preview.id);
         if (idx === -1 || arr.length === 0) return;
         const next = dir === "prev" ? (idx - 1 + arr.length) % arr.length : (idx + 1) % arr.length;
         setPreview(arr[next]);
-    };
+
+    }, [preview, navAny]);
 
     // Keyboard nav while preview open
     useEffect(() => {
@@ -241,7 +242,7 @@ export default function AllSubjects() {
         };
         window.addEventListener("keydown", onKeyDown);
         return () => window.removeEventListener("keydown", onKeyDown);
-    }, [preview, previewableItems]);
+    }, [preview, navAny]);
 
     return (
         <main
