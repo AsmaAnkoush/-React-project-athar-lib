@@ -84,7 +84,8 @@ function RowSkeleton() {
 function parseSubjectFolderName(folderName) {
     const raw = (folderName || "").trim();
     if (!raw) return { code: raw, name: raw };
-    const sepMatch = raw.split(/\s*[\-–—]\s*/);
+    // إزالة الهروب غير الضروري للشرطة داخل المجموعة الحرفية
+    const sepMatch = raw.split(/\s*[-–—]\s*/);
     if (sepMatch.length >= 2) {
         const code = sepMatch[0].trim();
         const name = sepMatch.slice(1).join(" - ").trim();
@@ -222,6 +223,7 @@ export default function AllSubjects() {
 
     // ===== Preview navigation (keyboard for all files) =====
     const previewableItems = useMemo(() => items.filter((f) => !isFolder(f.mimeType)), [items]);
+
     const navAny = useCallback((dir) => {
         if (!preview) return;
         const arr = previewableItems;
@@ -229,8 +231,7 @@ export default function AllSubjects() {
         if (idx === -1 || arr.length === 0) return;
         const next = dir === "prev" ? (idx - 1 + arr.length) % arr.length : (idx + 1) % arr.length;
         setPreview(arr[next]);
-
-    }, [preview, navAny]);
+    }, [preview, previewableItems]);
 
     // Keyboard nav while preview open
     useEffect(() => {

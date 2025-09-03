@@ -212,7 +212,11 @@ export default function LabsPage() {
     }
 
     /* ===== Preview: تنقّل بالكيبورد لكل الملفات ===== */
-    const previewableItems = useMemo(() => items.filter((f) => !isFolder(f.mimeType)), [items]);
+    const previewableItems = useMemo(
+        () => items.filter((f) => !isFolder(f.mimeType)),
+        [items]
+    );
+
     const navAny = useCallback((dir) => {
         if (!preview) return;
         const arr = previewableItems;
@@ -220,8 +224,7 @@ export default function LabsPage() {
         if (idx === -1 || arr.length === 0) return;
         const next = dir === "prev" ? (idx - 1 + arr.length) % arr.length : (idx + 1) % arr.length;
         setPreview(arr[next]);
-
-          }, [preview, navAny]);
+    }, [preview, previewableItems]);
 
     useEffect(() => {
         if (!preview) return;
