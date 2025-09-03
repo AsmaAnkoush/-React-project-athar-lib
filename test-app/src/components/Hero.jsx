@@ -42,10 +42,10 @@ export default function Hero() {
             dir="rtl"
         >
             {/* طبقة خلفية داكنة */}
-            <div className="absolute inset-0 bg-[#0f172a]/80 backdrop-blur-sm"></div>
+            <div className="absolute inset-0 bg-[#0f172a]/20 backdrop-blur-sm"></div>
 
             {/* المحتوى */}
-            <div className="relative z-10 bg-gradient-to-br from-[#1e293b] to-[#0f172a] text-white rounded-2xl shadow-2xl w-full max-w-3xl px-10 py-14 space-y-8 text-center border border-white/10 backdrop-blur-lg">
+            <div className="relative z-10 bg-gradient-to-br from-[#334155] to-[#1f2937] text-white rounded-2xl shadow-2xl w-full max-w-3xl px-10 py-14 space-y-8 text-center border border-white/10 backdrop-blur-lg">
 
                 {/* دعاء */}
                 <p className="text-xl font-semibold text-yellow-400 drop-shadow-sm">
@@ -116,8 +116,8 @@ export default function Hero() {
 
             {/* المودال للمجموعة */}
             {showModal && activeGroup && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
-                    <div className="bg-white rounded-xl shadow-lg p-6 pt-8 relative max-w-sm w-full text-center text-gray-800 space-y-4">
+                <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 px-4">
+                    <div className="bg-white rounded-xl shadow-lg p-6 pt-8 relative max-w-sm w-full text-center text-gray-800 space-y-4 border border-slate-200">
                         <button
                             onClick={() => setShowModal(false)}
                             className="absolute top-2 left-2 text-gray-500 hover:text-red-600 text-xl font-bold"
@@ -155,7 +155,7 @@ export default function Hero() {
 
             {/* المودال للصورة */}
             {showPoster && (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-4">
+                <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 px-4">
                     <div className="bg-white rounded-xl shadow-xl overflow-hidden relative max-w-md w-full">
                         <button
                             onClick={() => setShowPoster(false)}

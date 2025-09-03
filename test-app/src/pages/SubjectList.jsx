@@ -7,46 +7,17 @@ import {
 } from "lucide-react";
 import { FiArrowLeft } from "react-icons/fi";
 
-const KAREEM_FACEBOOK_URL = "https://www.facebook.com/kareem.taha.7146"; // بدّليه برابط كريم الحقيقي
-
-// Google API Key (public folders required)
+/********************
+ * CONFIG
+ ********************/
+const ROOT_FOLDER_ID = "1iPnlPlC-LzXE_jTn7KIk3EFD02_9cVyD"; // parent folder that contains subject folders
+const KAREEM_FACEBOOK_URL = "https://www.facebook.com/kareem.taha.7146";
 const API_KEY = "AIzaSyA_yt7VNybzoM2GNsqgl196TefA8uT33Qs";
-
-/* Subjects */
-const subjects = [
-    { code: "ENEE3308", name: "Dynamics", link: "https://drive.google.com/drive/u/0/folders/1606mxMKApRuLaxqPu7ERMH_bBXA3wYNc" },
-    { code: "ENEE2313", name: "Electronics 1", link: "https://drive.google.com/drive/u/0/folders/1vnjBVs_2jSJzTIQkqGoCbUJysMumkT_J" },
-    { code: "ENEE3304", name: "Electronics 2", link: "https://drive.google.com/drive/u/0/folders/1jZhd2gohbrToLkIkoSkBJwrzTOP3eYXd" },
-    { code: "ENEE4302", name: "Control Systems 1", link: "https://drive.google.com/drive/u/0/folders/1HVPDzLhFOOcJyPwdoi2HZey5DtZQ6t8r" },
-    { code: "ENEE2340", name: "Digital Systems", link: "https://drive.google.com/drive/u/0/folders/13jAxHfIIXxkUrw-GpdB16A4WrTA8DHPx" },
-    { code: "ENEE2408", name: "Electrical Machines", link: "https://drive.google.com/drive/u/0/folders/1SQYzMLKhx4mgR8vhEojzcePpHZGg0Y6y" },
-    { code: "ENEE4403", name: "Power Systems", link: "https://drive.google.com/drive/u/0/folders/10eRLSROCWBJeQSSjxRlzcHBouZK_DwYg" },
-    { code: "ENEE3309", name: "Communication Systems 1", link: "https://drive.google.com/drive/u/0/folders/1dNrZn8bOqgS7E2EA05cIG-Zpb3v7UuCD" },
-    { code: "ENEE3401", name: "Communication Systems 2", link: "https://drive.google.com/drive/u/0/folders/1GyFl5GmeMdEPfW_z0XkPO_6wzXt9d5V2" },
-    { code: "ENEE5330", name: "Numerical Methods", link: "https://drive.google.com/drive/u/0/folders/1Hzmg4sJhAnL6xw4gWqik5WAAEJ_-E0VK" },
-    { code: "ENEE3305", name: "Power Electronics", link: "https://drive.google.com/drive/u/0/folders/1gxdIqVBZQluLjJCAbSeFnT05Xet_JIhO" },
-    { code: "ENEE5306", name: "Protection Systems", link: "https://drive.google.com/drive/u/0/folders/10cXakt1CZACqigZAG80_LupdrDVRzGd3" },
-    { code: "ENEE4304", name: "Instrumentation and Measurement", link: "https://drive.google.com/drive/u/0/folders/1sTft42F38nIKzQA1nn1S3kcNuF7O4G0Q" },
-    { code: "ENEE2312", name: "Signals and Systems", link: "https://drive.google.com/drive/u/0/folders/1AiBSH7Qq7d-vpKq5Rf_9r5gHSXS0qlxP" },
-    { code: "ENEE3318", name: "Electromagnetics", link: "https://drive.google.com/drive/u/0/folders/1FmZ7aZIoM4uaeaX4eIfQ4hBTDEuN4xVG" },
-    { code: "ENCS4308", name: "Microprocessors", link: "https://drive.google.com/drive/u/0/folders/1wUagiWg4AFe4nC1Ve16R4yVF6QimjBgD" },
-    { code: "ENCS2308", name: "Computer Organization", link: "https://drive.google.com/drive/u/0/folders/1MNiulK2C72dYdSB4YgNnXydCKbGuU1Aa" },
-    { code: "MATH234", name: "Introduction to Linear Algebra", link: "https://drive.google.com/drive/u/0/folders/1xC9GDKU31xS8F31dGBVbgUzewpyNrPQl" },
-    { code: "MATH1411", name: "Calculus 1", link: "https://drive.google.com/drive/u/0/folders/1pImx9APzpXOhRyC5rlQeSJCTvwIbJ2Dl" },
-    { code: "MATH2311", name: "Calculus 3", link: "https://drive.google.com/drive/u/0/folders/1-H0EXSPSHWTX_YtYU1vuW55eoXW1ZNVa" },
-    { code: "MATH331", name: "Ordinary Differential Equations", link: "https://drive.google.com/drive/u/0/folders/1-UipxultNA7nNmLouZPAQlbXCyJ7oWbm" },
-    { code: "ENCE232", name: "Statics", link: "https://drive.google.com/drive/u/0/folders/1wXb7GsnaKJRgDDVZF38nTsvU1dR_-YBM" },
-    { code: "ENEE2311", name: "Network Analysis 1", link: "https://drive.google.com/drive/u/0/folders/1_CFlBAcIOxtZxInFVGNU9_BdGypEb7_m" },
-    { code: "ENEE2315", name: "Network Analysis 2", link: "https://drive.google.com/drive/u/0/folders/1q2N9G90Cfn9NoCrhssjdXvnv1JvStc6S" },
-];
 const FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdQ6L8wNp28GjRytOy06fmm6knEhDjny0TdLgHi-i1hMeA2tw/viewform";
 
-/* helpers */
-function getFolderId(link) {
-    if (!link) return null;
-    const m = link.replace(/\s+/g, "").match(/\/folders\/([^/?#]+)/);
-    return m?.[1] ?? null;
-}
+/********************
+ * HELPERS
+ ********************/
 const isFolder = (mime) => mime === "application/vnd.google-apps.folder";
 const isImageFile = (f) =>
     f?.mimeType?.startsWith("image/") || /\.(png|jpe?g|gif|webp|svg)$/i.test((f?.name || "").toLowerCase());
@@ -79,8 +50,7 @@ function pickIcon({ mime, isFolderFlag, name = "" }) {
     if (mime === "application/vnd.google-apps.document") return { Icon: FileText, tone: "bg-cyan-500/20 text-cyan-300" };
     return { Icon: File, tone: "bg-slate-500/20 text-slate-300" };
 }
-
-/* highlight helper */
+function escapeRegExp(str) { return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
 function highlightMatch(text, query) {
     if (!query) return text;
     const q = query.trim();
@@ -95,11 +65,6 @@ function highlightMatch(text, query) {
         )
     );
 }
-function escapeRegExp(str) {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-/* Skeleton row */
 function RowSkeleton() {
     return (
         <div className="rounded-2xl p-4 border border-white/10 bg-white/5 flex items-center gap-4 animate-pulse">
@@ -113,14 +78,82 @@ function RowSkeleton() {
     );
 }
 
+/********************
+ * SUBJECT NAME PARSER
+ ********************/
+function parseSubjectFolderName(folderName) {
+    const raw = (folderName || "").trim();
+    if (!raw) return { code: raw, name: raw };
+    const sepMatch = raw.split(/\s*[\-–—]\s*/);
+    if (sepMatch.length >= 2) {
+        const code = sepMatch[0].trim();
+        const name = sepMatch.slice(1).join(" - ").trim();
+        return { code, name };
+    }
+    const tokens = raw.split(/\s+/);
+    if (tokens.length >= 2) {
+        const code = tokens[0];
+        const name = tokens.slice(1).join(" ");
+        return { code, name };
+    }
+    return { code: raw, name: "" };
+}
+
+/********************
+ * API HELPERS
+ ********************/
+async function listChildren({ parentId, onlyFolders = false }) {
+    const base = "https://www.googleapis.com/drive/v3/files";
+    const mimeFilter = onlyFolders ? " and mimeType='application/vnd.google-apps.folder'" : "";
+    const q = encodeURIComponent(`'${parentId}' in parents and trashed=false${mimeFilter}`);
+    const fields = encodeURIComponent("files(id,name,mimeType,modifiedTime,webViewLink,webContentLink)");
+    const url = `${base}?q=${q}&key=${API_KEY}&fields=${fields}&pageSize=1000&orderBy=folder,name_natural`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Drive HTTP ${res.status}`);
+    const data = await res.json();
+    return (data.files ?? []);
+}
+
 export default function AllSubjects() {
+    // Search and selection
     const [search, setSearch] = useState("");
-    const [selectedSubject, setSelectedSubject] = useState(null);
+    const [selectedSubject, setSelectedSubject] = useState(null); // { id, code, name }
     const [pathStack, setPathStack] = useState([]); // [{id,name}]
+
+    // Data
+    const [subjects, setSubjects] = useState([]); // dynamically loaded from Drive
     const [items, setItems] = useState([]);
+
+    // UI state
     const [loading, setLoading] = useState(false);
     const [err, setErr] = useState("");
     const [preview, setPreview] = useState(null);
+
+    // ===== Load subject folders from Drive root (once) =====
+    useEffect(() => {
+        async function fetchSubjects() {
+            if (!ROOT_FOLDER_ID || ROOT_FOLDER_ID.startsWith("<")) return; // guard if not configured
+            setErr("");
+            try {
+                const folders = await listChildren({ parentId: ROOT_FOLDER_ID, onlyFolders: true });
+                const mapped = folders.map(f => {
+                    const { code, name } = parseSubjectFolderName(f.name);
+                    return {
+                        id: f.id,
+                        code: code || f.name,
+                        name: name || "",
+                        link: `https://drive.google.com/drive/folders/${f.id}`,
+                    };
+                }).sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: "base" }));
+                setSubjects(mapped);
+            } catch (e) {
+                console.error(e);
+                setErr("Failed to load subjects from Google Drive. Make sure the root folder is public and the API key is valid.");
+            }
+        }
+        fetchSubjects();
+    }, []);
+
     function resetAll() {
         setSelectedSubject(null);
         setPathStack([]);
@@ -128,57 +161,49 @@ export default function AllSubjects() {
         setErr("");
         setPreview(null);
     }
-    const subjectsList = useMemo(() => {
-        const q = search.trim().toLowerCase();
-        if (!q) return subjects;
-        return subjects.filter(
-            (s) =>
-                s.code.toLowerCase().includes(q) ||
-                s.name.toLowerCase().includes(q)
-        );
-    }, [search]);
 
-    // history/back behavior
+    // ===== Browser Back integration (popstate) =====
     useEffect(() => {
-        window.history.replaceState({ type: "root", depth: 0 }, "");
         const onPop = () => {
             if (preview) { setPreview(null); return; }
             if (pathStack.length > 1) { setPathStack(p => p.slice(0, -1)); return; }
-            if (selectedSubject) { resetAll(); return; } // <— مو selectedLab
+            if (selectedSubject) { resetAll(); return; }
+            // عند الهوم: المتصفح يرجع لصفحة سابقة خارج هذه الصفحة (السلوك الطبيعي)
         };
-
         window.addEventListener("popstate", onPop);
         return () => window.removeEventListener("popstate", onPop);
     }, [preview, pathStack.length, selectedSubject]);
 
+    const subjectsList = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        if (!q) return subjects;
+        return subjects.filter((s) => s.code.toLowerCase().includes(q) || s.name.toLowerCase().includes(q));
+    }, [search, subjects]);
+
     function handleSelectSubject(subj) {
-        const id = getFolderId(subj.link);
-        if (!id) return;
+        if (!subj?.id) return;
         setSelectedSubject(subj);
-        setPathStack([{ id, name: subj.name }]);
-        window.history.pushState({ type: "subject" }, "");
+        setPathStack([{ id: subj.id, name: subj.name || subj.code }]);
+        window.history.pushState({ view: "subject", id: subj.id }, "");
     }
 
+    // Load items for current folder
     useEffect(() => {
         async function fetchFolder() {
             if (!pathStack.length) return;
             setLoading(true); setErr("");
             const currentId = pathStack[pathStack.length - 1].id;
-            const q = encodeURIComponent(`'${currentId}' in parents and trashed=false`);
-            const fields = encodeURIComponent("files(id,name,mimeType,modifiedTime,webViewLink,webContentLink)");
-            const url = `https://www.googleapis.com/drive/v3/files?q=${q}&key=${API_KEY}&fields=${fields}&pageSize=1000&orderBy=folder,name_natural`;
             try {
-                const res = await fetch(url);
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const data = await res.json();
-                const files = (data.files ?? []).slice().sort((a, b) => {
+                const files = await listChildren({ parentId: currentId, onlyFolders: false });
+                const sorted = files.slice().sort((a, b) => {
                     if (isFolder(a.mimeType) && !isFolder(b.mimeType)) return -1;
                     if (!isFolder(a.mimeType) && isFolder(b.mimeType)) return 1;
                     return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
                 });
-                setItems(files);
-            } catch {
-                setErr("Failed to load from Google Drive. Check Public/Key.");
+                setItems(sorted);
+            } catch (e) {
+                console.error(e);
+                setErr("Failed to load from Google Drive. Check public permissions/API key.");
             } finally {
                 setLoading(false);
             }
@@ -188,38 +213,35 @@ export default function AllSubjects() {
 
     function openFolder(folder) {
         setPathStack((prev) => [...prev, { id: folder.id, name: folder.name }]);
-        window.history.pushState({ type: "folder" }, "");
+        window.history.pushState({ view: "folder", id: folder.id }, "");
     }
-    function goToLevel(index) { setPathStack((prev) => prev.slice(0, index + 1)); }
-
-    // ======= NEW: Back helpers =======
-    // رجوع خطوة للخلف (المتصفح/الهاتف)
-    function backOutOne() {
-        if (window.history.length > 1) {
-            window.history.back();
-        }
+    function goToLevel(index) {
+        setPathStack((prev) => prev.slice(0, index + 1));
+        window.history.pushState({ view: "folder", level: index }, "");
     }
-    // رجوع من متصفح المجلدات إلى صفحة المواد باستخدام عدد حالات التاريخ
-    function backToSubjects() {
-        if (pathStack.length > 0) {
-            window.history.go(-pathStack.length);
-        } else {
-            backOutOne();
-        }
-    }
-    // ================================
 
-
-    // preview image navigation
-    const imageItems = useMemo(() => items.filter((f) => isImageFile(f)), [items]);
-    const navImage = (dir) => {
+    // ===== Preview navigation (keyboard for all files) =====
+    const previewableItems = useMemo(() => items.filter((f) => !isFolder(f.mimeType)), [items]);
+    const navAny = (dir) => {
         if (!preview) return;
-        const arr = imageItems;
+        const arr = previewableItems;
         const idx = arr.findIndex((x) => x.id === preview.id);
-        if (idx === -1) return;
+        if (idx === -1 || arr.length === 0) return;
         const next = dir === "prev" ? (idx - 1 + arr.length) % arr.length : (idx + 1) % arr.length;
         setPreview(arr[next]);
     };
+
+    // Keyboard nav while preview open
+    useEffect(() => {
+        if (!preview) return;
+        const onKeyDown = (e) => {
+            if (e.key === "Escape") { e.preventDefault(); setPreview(null); return; }
+            if (e.key === "ArrowLeft") { e.preventDefault(); navAny("prev"); }
+            if (e.key === "ArrowRight") { e.preventDefault(); navAny("next"); }
+        };
+        window.addEventListener("keydown", onKeyDown);
+        return () => window.removeEventListener("keydown", onKeyDown);
+    }, [preview, previewableItems]);
 
     return (
         <main
@@ -231,33 +253,6 @@ export default function AllSubjects() {
                 <h2 className="text-3xl md:text-4xl font-extrabold text-center text-yellow-400 mb-8 drop-shadow">
                     Electrical Engineering Courses
                 </h2>
-                {/* شريط علوي في الصفحة الرئيسية */}
-                {!selectedSubject && (
-                    <div className="mb-4 flex flex-wrap items-center gap-3">
-                        <button
-                            onClick={backOutOne}
-                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition"
-                            aria-label="Go Back"
-                            title="Go Back"
-                        >
-                            <FiArrowLeft className="text-lg" />
-                            <span>Go Back</span>
-                        </button>
-
-                        <a
-                            href={FORM_URL}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-sm"
-                            title="Upload to Pending"
-                        >
-                            <Upload size={16} />
-                            Upload File
-                        </a>
-                    </div>
-                )}
-
-
 
                 {/* Search (subjects) */}
                 {!selectedSubject && (
@@ -280,7 +275,7 @@ export default function AllSubjects() {
                                 const q = search.trim();
                                 return (
                                     <motion.button
-                                        key={subj.code + subj.name}
+                                        key={subj.id}
                                         onClick={() => handleSelectSubject(subj)}
                                         className="group text-left block w-full"
                                         initial={{ opacity: 0, y: 8 }}
@@ -297,35 +292,17 @@ export default function AllSubjects() {
                                                     {highlightMatch(subj.code, q)}
                                                 </h4>
                                                 <p className="text-slate-200 text-sm truncate">
-                                                    {highlightMatch(subj.name, q)}
+                                                    {highlightMatch(subj.name || "", q)}
                                                 </p>
                                             </div>
                                         </div>
                                     </motion.button>
                                 );
                             })}
-                            {subjectsList.length === 0 && (
+                            {subjectsList.length === 0 && subjects.length > 0 && (
                                 <p className="text-center col-span-full text-slate-400 text-sm mt-4">
                                     No subjects found.
                                 </p>
-                            )}
-                            {!selectedSubject && (
-                                <div className="col-span-full mt-6">
-                                    <p className="w-fit mx-auto text-center text-xs sm:text-sm text-slate-400">
-                                        For suggestions or file submissions, contact{" "}
-                                        <a
-                                            href={KAREEM_FACEBOOK_URL}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-sky-300 hover:text-sky-400 underline"
-                                            title="Open Facebook profile"
-                                        >
-                                            Eng. Kareem Taha
-                                        </a>.
-                                    </p>
-                                </div>
-
-
                             )}
                         </AnimatePresence>
                     </div>
@@ -339,19 +316,22 @@ export default function AllSubjects() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.25 }}
                     >
-                        <div className="flex flex-wrap items-center gap-3">
+                        {/* زر Back بالأعلى مع أيقونة سهم */}
+                        <div className="mb-4">
                             <button
-                                onClick={backToSubjects}
+                                onClick={() => window.history.back()}
                                 className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition"
+                                title="Back"
+                                aria-label="Back"
                             >
                                 <FiArrowLeft className="text-lg" />
-                                All Subjects
+                                <span>Back</span>
                             </button>
+                        </div>
 
-
-
+                        <div className="flex flex-wrap items-center gap-3">
                             <h3 className="text-xl font-semibold text-sky-300">
-                                {selectedSubject.code} – {selectedSubject.name}
+                                {selectedSubject.code}{selectedSubject.name ? " – " : ""}{selectedSubject.name}
                             </h3>
                         </div>
 
@@ -388,7 +368,7 @@ export default function AllSubjects() {
                                             const isDir = isFolder(f.mimeType);
                                             const onClick = () => {
                                                 if (isDir) openFolder(f);
-                                                else { setPreview(f); window.history.pushState({ type: "preview" }, ""); }
+                                                else { setPreview(f); window.history.pushState({ view: "preview", id: f.id }, ""); }
                                             };
                                             return (
                                                 <motion.li
@@ -408,27 +388,7 @@ export default function AllSubjects() {
                                                                 {f.name}
                                                             </h4>
                                                             <div className="text-xs text-slate-400 mt-1">{fileTypeLabel(f)}</div>
-                                                            {!isDir && (
-                                                                <div className="mt-3 sm:hidden">
-                                                                    <button
-                                                                        onClick={(e) => { e.stopPropagation(); setPreview(f); window.history.pushState({ type: "preview" }, ""); }}
-                                                                        className="w-full px-3 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs"
-                                                                    >
-                                                                        Quick Preview
-                                                                    </button>
-                                                                </div>
-                                                            )}
                                                         </div>
-                                                        {!isDir && (
-                                                            <div className="hidden sm:flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
-                                                                <button
-                                                                    onClick={() => { setPreview(f); window.history.pushState({ type: "preview" }, ""); }}
-                                                                    className="px-3 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs"
-                                                                >
-                                                                    Quick Preview
-                                                                </button>
-                                                            </div>
-                                                        )}
                                                     </div>
                                                 </motion.li>
                                             );
@@ -436,26 +396,56 @@ export default function AllSubjects() {
                                         {items.length === 0 && <li className="text-slate-400 text-sm">No items here.</li>}
                                     </AnimatePresence>
                                 </ul>
-
-                                {/* Gaza banner (Arabic, RTL, Highlighted) */}
-                                <div className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm leading-relaxed text-slate-100" dir="rtl">
-                                    <div className="text-yellow-300 font-semibold mb-2 text-center">
-                                        وأنت بتدرس، لا تنسى أهلنا في غزة
-                                    </div>
-
-                                    <p className="whitespace-pre-line">
-                                        اللهم يا رحيم، يا قوي، يا جبار، كن لأهل غزة عونًا ونصيرًا، اللهم احفظهم بحفظك، وأمنهم بأمانك، واشفِ جرحاهم، وتقبل شهداءهم، واربط على قلوبهم، وأبدل خوفهم أمنًا، وحزنهم فرحًا، وضعفهم قوة، اللهم عجّل لهم بالفرج والنصر المبين، واجعل كيد عدوهم في نحورهم، إنك وليُّ ذلكَ والقادر عليه.
-                                    </p>
-                                </div>
                             </>
                         )}
                     </motion.div>
                 )}
 
-                <p className="text-center text-xs text-slate-400 mt-10">© 2025 - ElecLib</p>
+                {/* Footer – ثابت بكل الصفحات */}
+                <div className="mt-10 space-y-4">
+                    <div className="rounded-2xl border border-sky-500/30 bg-sky-600/10 p-4 text-center">
+                        <p className="text-sm sm:text-base text-sky-200 font-medium">
+                            For suggestions or file submissions, contact{" "}
+                            <a
+                                href={KAREEM_FACEBOOK_URL}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sky-300 underline decoration-dotted underline-offset-4 hover:text-sky-200 ml-1"
+                                title="Open Facebook profile"
+                            >
+                                Eng. Kareem Taha
+                            </a>.
+                        </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm leading-relaxed text-slate-100" dir="rtl">
+                        <div className="text-yellow-300 font-semibold mb-2 text-center">
+                            وأنت بتدرس، لا تنسى أهلنا في غزة
+                        </div>
+                        <p className="whitespace-pre-line">
+                            اللهم يا رحيم، يا قوي، يا جبار، كن لأهل غزة عونًا ونصيرًا، اللهم احفظهم بحفظك، وأمنهم بأمانك، واشفِ جرحاهم، وتقبل شهداءهم، واربط على قلوبهم، وأبدل خوفهم أمنًا، وحزنهم فرحًا، وضعفهم قوة، اللهم عجّل لهم بالفرج والنصر المبين، واجعل كيد عدوهم في نحورهم، إنك وليُّ ذلكَ والقادر عليه.
+                        </p>
+                    </div>
+
+                    {/* Upload File — ظاهر دائمًا */}
+                    <div className="flex justify-center">
+                        <a
+                            href={FORM_URL}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center gap-2 px-5 py-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-sm"
+                            title="Upload to Pending"
+                        >
+                            <Upload size={16} />
+                            Upload File
+                        </a>
+                    </div>
+
+                    <p className="text-center text-xs text-slate-400">© 2025 - ElecLib</p>
+                </div>
             </div>
 
-            {/* Quick Preview Modal */}
+            {/* Preview Modal */}
             <AnimatePresence>
                 {preview && (
                     <motion.div
@@ -463,25 +453,30 @@ export default function AllSubjects() {
                         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                     >
                         <motion.div
-                            className="relative bg-[#0b1224] border border-white/10 rounded-2xl w-full max-w-4xl overflow-hidden shadow-2xl"
+                            className="relative bg-[#0b1224] border border-white/10 rounded-2xl w-full max-w-6xl md:max-w-7xl overflow-hidden shadow-2xl"
                             initial={{ scale: 0.96, y: 12, opacity: 0 }}
                             animate={{ scale: 1, y: 0, opacity: 1 }}
                             exit={{ scale: 0.96, y: 12, opacity: 0 }}
                         >
                             <div className="flex items-center justify-between p-4 border-b border-white/10">
                                 <div className="text-white font-medium pr-4 whitespace-normal break-words">{preview.name}</div>
-                                <button className="p-2 rounded-lg bg-white/10 hover:bg-white/20" onClick={() => window.history.back()}>
+                                <button
+                                    className="p-2 rounded-lg bg-white/10 hover:bg-white/20"
+                                    onClick={() => setPreview(null)}
+                                    title="Close Preview (Esc)"
+                                >
                                     <X size={16} />
                                 </button>
                             </div>
 
                             <div className="relative bg-[#0a1020] p-3">
-                                {isImageFile(preview) && imageItems.length > 1 && (
+                                {/* أزرار مرئية فقط للصور؛ الكيبورد يعمل لكل الملفات */}
+                                {isImageFile(preview) && previewableItems.length > 1 && (
                                     <>
-                                        <button onClick={() => navImage("prev")} className="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-xl bg-white/10 hover:bg-white/20">
+                                        <button onClick={() => navAny("prev")} className="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-xl bg-white/10 hover:bg-white/20" aria-label="Previous">
                                             <ChevronLeft />
                                         </button>
-                                        <button onClick={() => navImage("next")} className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-xl bg-white/10 hover:bg-white/20">
+                                        <button onClick={() => navAny("next")} className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-xl bg-white/10 hover:bg-white/20" aria-label="Next">
                                             <ChevronRight />
                                         </button>
                                     </>
@@ -489,17 +484,20 @@ export default function AllSubjects() {
                                 <iframe
                                     title={preview.name}
                                     src={`https://drive.google.com/file/d/${preview.id}/preview`}
-                                    className="w-full h-[70vh] rounded-lg border-0"
+                                    className="w-full h-[80vh] rounded-lg border-0"
                                     allow="autoplay"
+                                    allowFullScreen
                                 />
                             </div>
 
                             <div className="p-4 flex items-center justify-end gap-2 border-t border-white/10">
-                                <button className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs" onClick={() => window.history.back()}>
-                                    Close
-                                </button>
                                 {getDownloadLink(preview) && (
-                                    <a href={getDownloadLink(preview)} target="_blank" rel="noreferrer" className="px-3 py-2 rounded-xl bg-yellow-500 hover:bg-yellow-600 text-white text-xs">
+                                    <a
+                                        href={getDownloadLink(preview)}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="px-3 py-2 rounded-xl bg-yellow-500 hover:bg-yellow-600 text-white text-xs"
+                                    >
                                         Download
                                     </a>
                                 )}
@@ -511,6 +509,3 @@ export default function AllSubjects() {
         </main>
     );
 }
-
-// لمن يكون فاتح صفحة المواد و يرجع باك , طواله رجعه ع الصفحة الي قبلها ,
-// وضيف صفحة عند المواد ايقونة ترجع للصفحة الي قبلها , يعني اما برجع من باك التلفون او من الايقونة
