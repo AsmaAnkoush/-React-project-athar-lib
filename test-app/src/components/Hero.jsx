@@ -2,175 +2,205 @@ import { Link } from "react-router-dom";
 import { useState } from "react";
 
 export default function Hero() {
-    const [showModal, setShowModal] = useState(false);
-    const [activeGroup, setActiveGroup] = useState("");
-    const [showPoster, setShowPoster] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [activeGroup, setActiveGroup] = useState("");
+  const [showPoster, setShowPoster] = useState(false);
 
-    const handleOpenModal = (group) => {
-        setActiveGroup(group);
-        setShowModal(true);
-    };
+  const handleOpenModal = (group) => {
+    setActiveGroup(group);
+    setShowModal(true);
+  };
 
-    const groupInfo = {
-        needs: {
-            title: "أصدقاء ذوي الاحتياجات الخاصة",
-            description:
-                "مجموعة بتدعم الطلاب ذوي الاحتياجات الخاصة بأي مساعدة بيحتاجوها، سواء أكاديميًا أو بأي جانب ثاني. إذا بتحب تكون سبب خير وتدعم زملاءك، مكانك معنا 💙",
-            link: "https://chat.whatsapp.com/K8r8ewZQkuR2DzKEYFvsoU?mode=r_t",
-            buttonText: "الانضمام إلى المجموعة",
-        },
-        goodness: {
-            title: "من هم للخير ساعون",
-            description:
-                "مجموعة تطوعية هدفها نشر الخير والمساعدة داخل الجامعة، من خلال دعم الزملاء وتقديم المبادرات الخيرية. وجودك معنا هو خطوة لبصمة جميلة 🌟",
-            link: "https://www.facebook.com/groups/2352165261734115/",
-            buttonText: "كن جزءًا من الخير",
-        },
-        lahn: {
-            title: "مجموعة لحن",
-            description:
-                "مجموعة شبابية تطوعية تهدف لإسعاد الآخرين ورسم البسمة على وجوههم، وأن تكون عونًا بإذن الله للأطفال الأيتام والمحرومين.",
-            link: "https://www.facebook.com/profile.php?id=100070275111033",
-            buttonText: "كن جزءًا من الخير",
-        },
-    };
+  const groupInfo = {
+    needs: {
+      title: "أصدقاء ذوي الاحتياجات الخاصة",
+      description:
+        "مجموعة بتدعم الطلاب ذوي الاحتياجات الخاصة بأي مساعدة بيحتاجوها، سواء أكاديميًا أو بأي جانب ثاني. إذا بتحب تكون سبب خير وتدعم زملاءك، مكانك معنا 💙",
+      link: "https://chat.whatsapp.com/K8r8ewZQkuR2DzKEYFvsoU?mode=r_t",
+      buttonText: "الانضمام إلى المجموعة",
+    },
+    goodness: {
+      title: "من هم للخير ساعون",
+      description:
+        "مجموعة تطوعية هدفها نشر الخير والمساعدة داخل الجامعة، من خلال دعم الزملاء وتقديم المبادرات الخيرية. وجودك معنا هو خطوة لبصمة جميلة 🌟",
+      link: "https://www.facebook.com/groups/2352165261734115/",
+      buttonText: "كن جزءًا من الخير",
+    },
+    lahn: {
+      title: "مجموعة لحن",
+      description:
+        "مجموعة شبابية تطوعية تهدف لإسعاد الآخرين ورسم البسمة على وجوههم، وأن تكون عونًا بإذن الله للأطفال الأيتام والمحرومين.",
+      link: "https://www.facebook.com/profile.php?id=100070275111033",
+      buttonText: "كن جزءًا من الخير",
+    },
+  };
 
-    return (
-        <div
-            className="relative min-h-screen bg-cover bg-center flex items-center justify-center px-4"
-            style={{ backgroundImage: "url('/images.jpeg')" }}
-            dir="rtl"
-        >
-            {/* طبقة خلفية داكنة */}
-            <div className="absolute inset-0 bg-[#0f172a]/20 backdrop-blur-sm"></div>
+  return (
+    <div className="relative min-h-screen flex items-center justify-center px-4" dir="rtl">
+      {/* خلفية فيديو */}
+      <video
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="auto"
+        className="fixed inset-0 z-0 w-full h-full object-cover"
+        aria-hidden="true"
+      >
+        <source src={process.env.PUBLIC_URL + "/videos/elec-bg.mp4"} type="video/mp4" />
+      </video>
 
-            {/* المحتوى */}
-            <div className="relative z-10 bg-gradient-to-br from-[#334155] to-[#1f2937] text-white rounded-2xl shadow-2xl w-full max-w-3xl px-10 py-14 space-y-8 text-center border border-white/10 backdrop-blur-lg">
+      {/* طبقة فوق الفيديو (خفيفة جدًا حالياً) */}
+      <div className="fixed inset-0 z-[1] bg-transparent backdrop-blur-none" />
 
-                {/* دعاء */}
-                <p className="text-xl font-semibold text-yellow-400 drop-shadow-sm">
-                    اللهم انفعنا بما علَّمتنا، وعلِّمنا ما ينفعنا، وزدنا علمًا.
-                </p>
+      {/* المحتوى */}
+      <div className="relative z-10 w-full max-w-3xl">
+        {/* كرت أسود فاتح + برتقالي غامق */}
+        <div className="bg-gradient-to-br from-neutral-800 to-neutral-900 text-white rounded-2xl shadow-2xl w-full px-10 py-14 space-y-8 text-center border border-white/10 backdrop-blur-lg">
+          
+          {/* عنوان بارز أول سطر */}
+          <h1 className="text-4xl md:text-4xl font-extrabold leading-tight tracking-tight drop-shadow">
+            <span className="text-orange-400">ElecLib</span>
+            <span className="text-white"> – مكتبة الهندسة الكهربائية</span>
+          </h1>
 
-                {/* اسم المكتبة */}
-                <h1 className="text-3xl md:text-4.5xl font-extrabold flex justify-center items-center gap-2 text-sky-400">
-                    ElecLib - مكتبة الهندسة الكهربائية
-                </h1>
+          {/* وصف */}
+          <p className="text-lg md:text-xl text-slate-200/90 leading-relaxed">
+            مكتبة إلكترونية لطلاب الهندسة الكهربائية، تم إعدادها بواسطة طلاب وخريجي التخصص.
+          </p>
+          <p className="text-lg md:text-xl text-slate-200/90 leading-relaxed">
+            تضم فورمات، تلاخيص، محاضرات، وبروجكتات سابقة لمواد التخصص، مع العمل المستمر على إضافة باقي المواد تدريجيًا.
+          </p>
 
-                {/* وصف */}
-                <p className="text-lg md:text-xl text-slate-200 leading-relaxed">
-                    مكتبة إلكترونية لطلاب الهندسة الكهربائية، تم إعدادها بواسطة طلاب وخريجي التخصص.
-                </p>
-                <p className="text-lg md:text-xl text-slate-200 leading-relaxed">
-                    تضم فورمات، تلاخيص، محاضرات، وبروجكتات سابقة لمواد التخصص، مع العمل المستمر على إضافة باقي المواد تدريجيًا.
-                </p>
+          {/* روابط رئيسية */}
+          <div className="flex flex-col sm:flex-row justify-center gap-3">
+            <Link
+              to="/subjects"
+              className="inline-block text-white font-semibold py-2.5 px-8 rounded-full shadow-lg text-base transition transform hover:scale-[1.02]"
+              style={{ backgroundColor: "#fb923c" }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f97316")}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#fb923c")}
+            >
+              Cources
+            </Link>
 
-                {/* روابط */}
-                <div className="flex flex-col sm:flex-row justify-center gap-4">
+            <Link
+              to="/labs"
+              className="inline-block text-white font-semibold py-2.5 px-8 rounded-full shadow-lg text-base transition transform hover:scale-[1.02]"
+              style={{ backgroundColor: "#fb923c" }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f97316")}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#fb923c")}
+            >
+              Labs
+            </Link>
+          </div>
 
-                    <Link
-                        to="/subjects"
-                        className="inline-block bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 px-10 rounded-full shadow-lg text-lg transition transform hover:scale-105"
-                    >
-                        Cources
-                    </Link>
-                    <Link
-                        to="/labs"
-                        className="inline-block bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 px-10 rounded-full shadow-lg text-lg transition transform hover:scale-105"
-                    >
-                        Labs
-                    </Link>
-                </div>
+          {/* مجموعات الخير — كل زر بدرجة مختلفة من البرتقالي */}
+          <div className="relative z-10 mt-12">
+            <h2 className="text-lg font-bold text-white mb-4 text-center border-b border-white/10 pb-2 w-fit mx-auto">
+              مجموعات الخير
+            </h2>
 
-                {/* مجموعات الخير */}
-                <div className="relative z-10 mt-20">
-                    <h2 className="text-xl font-bold text-white mb-6 text-center border-b border-white/10 pb-2 w-fit mx-auto">
-                        مجموعات الخير
-                    </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 px-2 sm:px-0">
+              {/* needs — orange-400 */}
+              <button
+                onClick={() => handleOpenModal("needs")}
+                className="bg-[#fb923c] hover:bg-[#f97316] text-white text-center rounded-md py-2 px-3 shadow-sm border border-orange-300/50 transition text-xs"
+              >
+                أصدقاء ذوي الاحتياجات الخاصة
+              </button>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 px-4 sm:px-0">
-                        <button
-                            onClick={() => handleOpenModal("needs")}
-                            className="bg-blue-900/60 hover:bg-blue-900/80 text-white text-center rounded-lg py-4 px-3 shadow-sm border border-blue-200/10 transition hover:shadow-md text-sm animate-pulse"
-                        >
-                            أصدقاء ذوي الاحتياجات الخاصة
-                        </button>
-                        <button
-                            onClick={() => handleOpenModal("lahn")}
-                            className="bg-sky-800/60 hover:bg-sky-800/80 text-white text-center rounded-lg py-4 px-3 shadow-sm border border-sky-200/10 transition hover:shadow-md text-sm animate-pulse"
-                        >
-                            مجموعة لحن
-                        </button>
-                        <button
-                            onClick={() => handleOpenModal("goodness")}
-                            className="bg-indigo-900/60 hover:bg-indigo-900/80 text-white text-center rounded-lg py-4 px-3 shadow-sm border border-indigo-200/10 transition hover:shadow-md text-sm animate-pulse"
-                        >
-                            من هم للخير ساعون
-                        </button>
-                    </div>
-                </div>
+              {/* lahn — orange-300 (أفتح) */}
+              <button
+                onClick={() => handleOpenModal("lahn")}
+                className="bg-[#fdba74] hover:bg-[#fb923c] text-slate-900 text-center rounded-md py-2 px-3 shadow-sm border border-orange-300/60 transition text-xs"
+              >
+                مجموعة لحن
+              </button>
 
-                {/* الفوتر */}
-                <p className="text-xs text-gray-500 mt-6">© 2025 - ElecLib</p>
+              {/* goodness — orange-500 (أغمق) */}
+              <button
+                onClick={() => handleOpenModal("goodness")}
+                className="bg-[#f97316] hover:bg-[#ea580c] text-white text-center rounded-md py-2 px-3 shadow-sm border border-orange-400/40 transition text-xs"
+              >
+                من هم للخير ساعون
+              </button>
             </div>
+          </div>
 
-            {/* المودال للمجموعة */}
-            {showModal && activeGroup && (
-                <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 px-4">
-                    <div className="bg-white rounded-xl shadow-lg p-6 pt-8 relative max-w-sm w-full text-center text-gray-800 space-y-4 border border-slate-200">
-                        <button
-                            onClick={() => setShowModal(false)}
-                            className="absolute top-2 left-2 text-gray-500 hover:text-red-600 text-xl font-bold"
-                        >
-                            ✖
-                        </button>
+          {/* الدعاء — تحت وبالأبيض */}
+          <div className="mt-10">
+            <p className="text-base md:text-lg text-white leading-relaxed">
+              اللهم انفعنا بما علَّمتنا، وعلِّمنا ما ينفعنا، وزدنا علمًا.
+            </p>
+          </div>
 
-                        <h2 className="text-lg font-bold text-blue-800">
-                            {groupInfo[activeGroup].title}
-                        </h2>
-                        <p>{groupInfo[activeGroup].description}</p>
-
-                        {/* الزرين تحت بعض */}
-                        <div className="flex flex-col items-center gap-3">
-                            {activeGroup === "needs" && (
-                                <button
-                                    onClick={() => setShowPoster(true)}
-                                    className="w-full bg-blue-600 text-white px-4 py-2 rounded-full hover:bg-blue-700 transition animate-pulse"
-                                >
-                                    البوست التعريفي
-                                </button>
-                            )}
-                            <a
-                                href={groupInfo[activeGroup].link}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="w-full bg-blue-600 text-white px-4 py-2 rounded-full hover:bg-blue-700 transition animate-pulse text-center"
-                            >
-                                {groupInfo[activeGroup].buttonText}
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* المودال للصورة */}
-            {showPoster && (
-                <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 px-4">
-                    <div className="bg-white rounded-xl shadow-xl overflow-hidden relative max-w-md w-full">
-                        <button
-                            onClick={() => setShowPoster(false)}
-                            className="absolute top-2 left-2 text-black text-xl font-bold hover:text-red-600"
-                        >
-                            ✖
-                        </button>
-                        <img
-                            src="/poster.jpg"
-                            alt="البوست التعريفي"
-                            className="w-full h-auto object-cover"
-                        />
-                    </div>
-                </div>
-            )}
+          {/* الفوتر */}
+          <p className="text-xs text-slate-400">© 2025 - ElecLib</p>
         </div>
-    );
+      </div>
+
+      {/* مودال المجموعة — برتقالي فاتح جدًا */}
+      {showModal && activeGroup && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 px-4">
+          <div className="bg-orange-50 text-slate-900 rounded-xl shadow-xl p-6 pt-8 relative max-w-sm w-full border border-orange-200">
+            <button
+              onClick={() => setShowModal(false)}
+              className="absolute top-2 left-2 text-orange-500 hover:text-orange-600 text-xl font-bold"
+              aria-label="إغلاق"
+            >
+              ✖
+            </button>
+
+            <h2 className="text-lg font-extrabold text-orange-600 mb-2">
+              {groupInfo[activeGroup].title}
+            </h2>
+            <p className="text-slate-700">{groupInfo[activeGroup].description}</p>
+
+            <div className="flex flex-col items-center gap-3 mt-5">
+              {activeGroup === "needs" && (
+                <button
+                  onClick={() => setShowPoster(true)}
+                  className="w-full bg-orange-100 hover:bg-orange-200 text-orange-800 px-3 py-2 rounded-full transition text-sm border border-orange-200"
+                >
+                  البوست التعريفي
+                </button>
+              )}
+              <a
+                href={groupInfo[activeGroup].link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full text-white px-3 py-2 rounded-full transition text-center text-sm"
+                style={{ backgroundColor: "#fb923c" }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f97316")}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#fb923c")}
+              >
+                {groupInfo[activeGroup].buttonText}
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* مودال الصورة (بدّلتها؟ لا، أبقيتها داكنة كما هي) */}
+      {showPoster && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
+          <div className="bg-neutral-900 rounded-xl shadow-2xl overflow-hidden relative max-w-md w-full border border-white/10">
+            <button
+              onClick={() => setShowPoster(false)}
+              className="absolute top-2 left-2 text-white/80 text-xl font-bold hover:text-red-400"
+              aria-label="إغلاق"
+            >
+              ✖
+            </button>
+            <img
+              src="/poster.jpg"
+              alt="البوست التعريفي"
+              className="w-full h-auto object-cover"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
