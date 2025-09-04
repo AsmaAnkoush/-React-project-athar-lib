@@ -81,7 +81,7 @@ function parseSubjectFolderName(folderName) {
   const dashAfterDigits = raw.match(/^(.+?\d+)\s*[-_]+(.*)$/);
   if (dashAfterDigits) return { code: dashAfterDigits[1].trim(), name: dashAfterDigits[2].trim() };
 
-  const dashSplit = raw.split(/\s+[-–—]\s+/);
+const dashSplit = raw.split(/\s*[-–—]\s*/);
   if (dashSplit.length >= 2) return { code: dashSplit[0].trim(), name: dashSplit.slice(1).join(" - ").trim() };
 
   const otherSplit = raw.split(/\s+[:|]\s+/);
