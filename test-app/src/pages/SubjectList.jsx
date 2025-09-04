@@ -93,7 +93,7 @@ const dashSplit = raw.split(/\s*[-–—]\s*/);
 }
 function cleanNameForDisplay(name) {
   return (name || "")
-    .replace(/[_\-]+/g, " ")
+.replace(/[-_]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
