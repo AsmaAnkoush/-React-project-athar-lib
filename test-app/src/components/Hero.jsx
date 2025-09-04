@@ -61,7 +61,20 @@ export default function Hero() {
           {/* عنوان بارز أول سطر */}
           <h1 className="text-4xl md:text-4xl font-extrabold leading-tight tracking-tight drop-shadow">
             <span className="text-orange-400">ElecLib</span>
-            <span className="text-white"> – مكتبة الهندسة الكهربائية</span>
+<span
+  className="
+    relative
+    text-transparent bg-clip-text
+    bg-gradient-to-r from-white via-white to-orange-200
+    font-extrabold
+    drop-shadow-[0_4px_14px_rgba(251,146,60,0.35)]
+    after:content-[''] after:absolute after:inset-x-0 after:-bottom-1.5 after:h-[3px]
+    after:bg-gradient-to-r after:from-orange-400/0 after:via-orange-400/70 after:to-orange-400/0
+    after:rounded-full
+  "
+>
+  – مكتبة الهندسة الكهربائية
+</span>
           </h1>
 
           {/* وصف */}
@@ -74,25 +87,20 @@ export default function Hero() {
 
           {/* روابط رئيسية */}
           <div className="flex flex-col sm:flex-row justify-center gap-3">
-            <Link
-              to="/subjects"
-              className="inline-block text-white font-semibold py-2.5 px-8 rounded-full shadow-lg text-base transition transform hover:scale-[1.02]"
-              style={{ backgroundColor: "#fb923c" }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f97316")}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#fb923c")}
-            >
-              Cources
-            </Link>
+           <Link
+  to="/subjects"
+  className="inline-block bg-orange-400 hover:bg-orange-500 text-white font-semibold py-2.5 px-8 rounded-full shadow-lg text-base transition-transform duration-150 hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-orange-400/70 focus:ring-offset-2 focus:ring-offset-neutral-900"
+>
+  Courses
+</Link>
 
-            <Link
-              to="/labs"
-              className="inline-block text-white font-semibold py-2.5 px-8 rounded-full shadow-lg text-base transition transform hover:scale-[1.02]"
-              style={{ backgroundColor: "#fb923c" }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f97316")}
-              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#fb923c")}
-            >
-              Labs
-            </Link>
+<Link
+  to="/labs"
+  className="inline-block bg-orange-400 hover:bg-orange-500 text-white font-semibold py-2.5 px-8 rounded-full shadow-lg text-base transition-transform duration-150 hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-orange-400/70 focus:ring-offset-2 focus:ring-offset-neutral-900"
+>
+  Labs
+</Link>
+
           </div>
 
           {/* مجموعات الخير — كل زر بدرجة مختلفة من البرتقالي */}
@@ -130,9 +138,20 @@ export default function Hero() {
 
           {/* الدعاء — تحت وبالأبيض */}
           <div className="mt-10">
-            <p className="text-base md:text-lg text-white leading-relaxed">
-              اللهم انفعنا بما علَّمتنا، وعلِّمنا ما ينفعنا، وزدنا علمًا.
-            </p>
+            <p
+  className="
+    relative mx-auto max-w-2xl
+    text-center text-lg md:text-xl font-semibold leading-relaxed
+    text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-orange-200
+    drop-shadow-[0_4px_14px_rgba(251,146,60,0.35)]
+    after:content-[''] after:absolute after:inset-x-0 after:-bottom-2 after:h-[3px]
+    after:bg-gradient-to-r after:from-orange-400/0 after:via-orange-400/70 after:to-orange-400/0
+    after:rounded-full
+  "
+>
+  اللهم انفعنا بما علَّمتنا، وعلِّمنا ما ينفعنا، وزدنا علمًا.
+</p>
+
           </div>
 
           {/* الفوتر */}
