@@ -26,15 +26,18 @@ function fileTypeLabel(f) {
   return ext.toUpperCase();
 }
 
-function getDownloadLink(file) {
-  if (file.webContentLink) return file.webContentLink;
-  const isGoogleDoc = file.mimeType?.startsWith("application/vnd.google-apps");
-  if (isGoogleDoc) {
-    return `https://www.googleapis.com/drive/v3/files/${file.id}/export?mimeType=${encodeURIComponent(
-      "application/pdf"
-    )}&key=${API_KEY}`;
+/** رابط تنزيل موحّد يعمل لكل الأنواع (صور/ملفات مباشرة/مستندات Google) */
+function getUniversalDownloadLink(file) {
+  if (!file) return null;
+  // مستندات Google (Docs/Sheets/Slides...) — نعمل export PDF
+  if (file.mimeType?.startsWith("application/vnd.google-apps")) {
+    const exportMime = "application/pdf";
+    return `https://www.googleapis.com/drive/v3/files/${file.id}/export?mimeType=${encodeURIComponent(exportMime)}&key=${API_KEY}`;
   }
-  return null;
+  // إن وجد رابط مباشر من API
+  if (file.webContentLink) return file.webContentLink;
+  // باقي الأنواع (صور/فيديو/Zip...) — رابط uc موثوق
+  return `https://drive.google.com/uc?export=download&id=${file.id}`;
 }
 
 function pickIcon({ mime, isFolderFlag, name = "" }) {
@@ -110,8 +113,9 @@ export default function LabsPage() {
   const [err, setErr] = useState("");
   const [preview, setPreview] = useState(null);
 
-  // نمنع تراكم history للمعاينة: ندفع مرّة واحدة فقط
+  // History/scroll للتحكم بالإغلاق والرجوع لنفس المكان
   const previewPushedRef = useRef(false);
+  const scrollYRef = useRef(0);
 
   /* ===== تحميل مجلدات اللابات من مجلد الجذر ===== */
   useEffect(() => {
@@ -152,7 +156,8 @@ export default function LabsPage() {
     const onPop = () => {
       if (preview) {
         setPreview(null);
-        previewPushedRef.current = false; // خرجنا من وضع المعاينة
+        previewPushedRef.current = false;
+        window.scrollTo(0, scrollYRef.current || 0);
         return;
       }
       if (pathStack.length > 1) { setPathStack((p) => p.slice(0, -1)); return; }
@@ -165,7 +170,7 @@ export default function LabsPage() {
   function backOne() {
     if (window.history.length > 1) window.history.back();
     else {
-      if (preview) { setPreview(null); previewPushedRef.current = false; return; }
+      if (preview) { setPreview(null); previewPushedRef.current = false; window.scrollTo(0, scrollYRef.current || 0); return; }
       if (pathStack.length > 1) { setPathStack((p) => p.slice(0, -1)); return; }
       if (selectedLab) { resetAll(); return; }
     }
@@ -213,19 +218,24 @@ export default function LabsPage() {
   }
 
   /* ===== Preview ===== */
-  const previewableItems = useMemo(() => items.filter((f) => !isFolder(f.mimeType)), [items]);
+  // للتنقّل بالكيبورد: بين الصور فقط
+  const navigableImages = useMemo(
+    () => items.filter((f) => !isFolder(f.mimeType) && isImageFile(f)),
+    [items]
+  );
 
   const navAny = useCallback((dir) => {
-    if (!preview) return;
-    const arr = previewableItems;
+    if (!preview || !isImageFile(preview)) return;
+    const arr = navigableImages;
     const idx = arr.findIndex((x) => x.id === preview.id);
     if (idx === -1 || arr.length === 0) return;
     const next = dir === "prev" ? (idx - 1 + arr.length) % arr.length : (idx + 1) % arr.length;
     setPreview(arr[next]);
-  }, [preview, previewableItems]);
+  }, [preview, navigableImages]);
 
-  // افتح المعاينة: ادفع history مرة واحدة فقط
+  // افتح المعاينة: احفظ مكان التمرير وادفع history مرة واحدة فقط
   function openPreview(f) {
+    scrollYRef.current = window.scrollY || 0;
     if (!previewPushedRef.current) {
       window.history.pushState({ type: "preview", id: f.id }, "");
       previewPushedRef.current = true;
@@ -233,17 +243,17 @@ export default function LabsPage() {
     setPreview(f);
   }
 
-  // أغلق كل المعاينات بضغطة واحدة
+  // أغلق كل المعاينات (X أو Esc) + ارجع لنفس مكان التمرير
   function closePreviewAll() {
+    setPreview(null);
     if (previewPushedRef.current) {
-      window.history.back();   // يرجع خطوة واحدة ويخرج من وضع المعاينة نهائيًا
-    } else {
-      setPreview(null);
+      window.history.back();
     }
     previewPushedRef.current = false;
+    setTimeout(() => window.scrollTo(0, scrollYRef.current || 0), 0);
   }
 
-  // كيبورد: Esc يغلق كل المعاينات + أسهم للتنقّل
+  // كيبورد: Esc يغلق كل المعاينات + أسهم للتنقّل بين الصور
   useEffect(() => {
     if (!preview) return;
     const onKeyDown = (e) => {
@@ -282,9 +292,19 @@ export default function LabsPage() {
       <div className="fixed inset-0 z-[1] bg-transparent backdrop-blur-none" />
 
       <main className="relative z-10 w-full max-w-6xl text-white py-10">
-        <h2 className="text-3xl md:text-4xl font-extrabold text-center text-orange-400 mb-8 drop-shadow">
-          Electrical Engineering Labs
-        </h2>
+        <h2
+  className="
+    text-4xl md:text-5xl font-extrabold tracking-tight leading-tight
+    bg-gradient-to-r from-orange-400 via-orange-500 to-amber-300
+    text-transparent bg-clip-text
+    drop-shadow-[0_6px_20px_rgba(251,146,60,0.35)]
+    text-center
+  "
+>
+  Electrical Engineering Labs
+</h2>
+
+
 
         {/* زر رجوع على الصفحة الرئيسية للّابات */}
         {!selectedLab && (
@@ -382,22 +402,18 @@ export default function LabsPage() {
               </button>
             </div>
 
-            {/* عنوان اللاب كسطرين: الرمز ثم الاسم */}
-            <div className="flex flex-wrap items-start gap-3">
-              <div className="mt-1">
-                <div className="text-xl font-semibold text-orange-300 leading-tight">
-                  {selectedLab.code}
-                </div>
+            {/* عنوان اللاب: الرمز - الاسم في سطر واحد وبشكل بارز */}
+            <div className="mb-2">
+              <h3 className="text-2xl md:text-3xl font-extrabold tracking-tight flex flex-wrap items-baseline gap-2">
+                <span className="text-orange-400">{selectedLab.code}</span>
                 {selectedLab.name && (
-                  <div className="text-base text-slate-300 leading-tight">
-                    {selectedLab.name}
-                  </div>
+                  <span className="text-white/90">- {selectedLab.name}</span>
                 )}
-              </div>
+              </h3>
             </div>
 
             {/* Breadcrumb */}
-            <div className="mt-3 text-sm flex flex-wrap items-center gap-1">
+            <div className="mt-2 text-sm flex flex-wrap items-center gap-1">
               {pathStack.map((p, idx) => (
                 <span key={p.id} className="flex items-center gap-1">
                   <button
@@ -456,7 +472,7 @@ export default function LabsPage() {
           </motion.div>
         )}
 
-        {/* Footer – ثابت بكل الصفحات (مع صندوق غزة مثل المواد) */}
+        {/* Footer – ثابت */}
         <div className="mt-10 space-y-4">
           <div className="rounded-2xl border border-orange-500/30 bg-orange-600/10 p-4 text-center">
             <p className="text-sm sm:text-base text-orange-200 font-medium">
@@ -473,11 +489,12 @@ export default function LabsPage() {
             </p>
           </div>
 
-          {/* الدعاء (نفس صفحة المواد) */}
+          {/* الدعاء */}
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm leading-relaxed text-slate-100" dir="rtl">
-            <div className="text-yellow-300 font-semibold mb-2 text-center">
-              وأنت بتدرس، لا تنسى أهلنا في غزة
-            </div>
+           <div className="text-orange-400 font-semibold mb-2 text-center">
+  وأنت بتدرس، لا تنسى أهلنا في غزة
+</div>
+
             <p className="whitespace-pre-line">
               اللهم يا رحيم، يا قوي، يا جبار، كن لأهل غزة عونًا ونصيرًا، اللهم احفظهم بحفظك، وأمنهم بأمانك، واشفِ جرحاهم،
               وتقبل شهداءهم، واربط على قلوبهم، وأبدل خوفهم أمنًا، وحزنهم فرحًا، وضعفهم قوة، اللهم عجّل لهم بالفرج والنصر المبين،
@@ -488,22 +505,22 @@ export default function LabsPage() {
           {/* Upload File */}
           <div className="flex justify-center">
             <a
-              href={FORM_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-2 px-5 py-3 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-sm"
-              title="Upload to Pending"
-            >
-              <Upload size={16} />
-              Upload File
-            </a>
+            href={FORM_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-2 px-5 py-3 rounded-xl bg-orange-400 hover:bg-orange-500 text-white text-sm transition"
+            title="Upload to Pending"
+          >
+            <Upload size={16} />
+            Upload File
+          </a>
           </div>
 
           <p className="text-center text-xs text-slate-300">© 2025 - ElecLib</p>
         </div>
       </main>
 
-      {/* Preview Modal: إغلاق واحد يسكر كل المعاينات */}
+      {/* Preview Modal */}
       <AnimatePresence>
         {preview && (
           <motion.div
@@ -511,12 +528,13 @@ export default function LabsPage() {
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
           >
             <motion.div
-              className="relative bg-neutral-900 border border-white/10 rounded-2xl w-full max-w-6xl md:max-w-7xl overflow-hidden shadow-2xl"
+              className="relative bg-neutral-900 border border-white/10 rounded-2xl w-full max-w-[95vw] md:max-w-[90vw] max-h-[92vh] overflow-hidden shadow-2xl flex flex-col"
               initial={{ scale: 0.96, y: 12, opacity: 0 }}
               animate={{ scale: 1, y: 0, opacity: 1 }}
               exit={{ scale: 0.96, y: 12, opacity: 0 }}
             >
-              <div className="flex items-center justify-between p-4 border-b border-white/10">
+              {/* Header */}
+              <div className="flex items-center justify-between p-4 border-b border-white/10 shrink-0">
                 <div className="text-white font-medium pr-4 whitespace-normal break-words">{preview.name}</div>
                 <button
                   className="p-2 rounded-lg bg-white/10 hover:bg-white/20"
@@ -527,45 +545,47 @@ export default function LabsPage() {
                 </button>
               </div>
 
-              <div className="relative bg-neutral-950 p-3">
-                {isImageFile(preview) && previewableItems.length > 1 && (
+              {/* Content */}
+              <div className="relative bg-neutral-950 p-3 grow">
+                {isImageFile(preview) && navigableImages.length > 1 && (
                   <>
                     <button
                       onClick={() => navAny("prev")}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-xl bg-white/10 hover:bg-white/20"
+                      className="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-xl bg-white/10 hover:bg-white/20 z-10"
                       aria-label="Previous"
                     >
                       <ChevronLeft />
                     </button>
                     <button
                       onClick={() => navAny("next")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-xl bg-white/10 hover:bg-white/20"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-xl bg-white/10 hover:bg-white/20 z-10"
                       aria-label="Next"
                     >
                       <ChevronRight />
                     </button>
                   </>
                 )}
+
+                {/* نستخدم Google Drive preview عبر iframe — يعمل للصور و PDF والفيديو */}
                 <iframe
                   title={preview.name}
                   src={`https://drive.google.com/file/d/${preview.id}/preview`}
-                  className="w-full h-[80vh] rounded-lg border-0"
+                  className="w-full h-[60vh] md:h-[60vh] rounded-lg border-0"
                   allow="autoplay"
                   allowFullScreen
                 />
               </div>
 
-              <div className="p-4 flex items-center justify-end gap-2 border-t border-white/10">
-                {getDownloadLink(preview) && (
-                  <a
-                    href={getDownloadLink(preview)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="px-3 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs"
-                  >
-                    Download
-                  </a>
-                )}
+              {/* Footer: زر Download يظهر دائمًا */}
+              <div className="p-4 flex items-center justify-end gap-2 border-t border-white/10 shrink-0">
+                <a
+                  href={getUniversalDownloadLink(preview)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-3 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs"
+                >
+                  Download
+                </a>
               </div>
             </motion.div>
           </motion.div>
