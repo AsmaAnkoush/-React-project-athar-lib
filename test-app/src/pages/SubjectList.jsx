@@ -5,6 +5,26 @@ import {
   FileArchive, FileSpreadsheet, FileAudio2, FileVideo2, Presentation,
   X, Zap, ChevronLeft, ChevronRight, Upload
 } from "lucide-react";
+// ==== Feedback trigger helper ====
+const LS_TRIGGER_KEY = "eleclib_feedback_trigger";
+const LS_COUNT_KEY   = "eleclib_feedback_open_count";
+
+function bumpFeedbackCounterAndTrigger() {
+  try {
+    // لو جاهز أصلاً، ما نعيد
+    if (localStorage.getItem(LS_TRIGGER_KEY) === "1") return;
+
+    const n = parseInt(localStorage.getItem(LS_COUNT_KEY) || "0", 10) + 1;
+    localStorage.setItem(LS_COUNT_KEY, String(n));
+
+    if (n >= 7) {
+      localStorage.setItem(LS_TRIGGER_KEY, "1");
+      // حتى يفتح المودال فوراً بدون ريفرش
+      window.dispatchEvent(new Event("eleclib:feedback"));
+    }
+  } catch {}
+}
+
 
 /********************
  * CONFIG
@@ -236,10 +256,17 @@ export default function AllSubjects() {
     fetchFolder();
   }, [pathStack]);
 
-  function openFolder(folder) {
-    setPathStack((prev) => [...prev, { id: folder.id, name: folder.name }]);
-    window.history.pushState({ view: "folder", id: folder.id }, "");
-  }
+ function openFolder(folder) {
+  setPathStack((prev) => [...prev, { id: folder.id, name: folder.name }]);
+  window.history.pushState({ view: "folder", id: folder.id }, "");
+}
+function openFile(f) {
+  setPreview(f);
+  window.history.pushState({ view: "preview", id: f.id }, "");
+  bumpFeedbackCounterAndTrigger();     // 👈 هون
+}
+
+
   function goToLevel(index) {
     setPathStack((prev) => prev.slice(0, index + 1));
     window.history.pushState({ view: "folder", level: index }, "");
@@ -450,10 +477,11 @@ export default function AllSubjects() {
                   {items.map((f) => {
                     const { Icon, tone } = pickIcon({ mime: f.mimeType, isFolderFlag: isFolder(f.mimeType), name: f.name });
                     const isDir = isFolder(f.mimeType);
-                    const onClick = () => {
-                      if (isDir) openFolder(f);
-                      else { openPreview(f); }
-                    };
+const onClick = () => {
+  if (isDir) openFolder(f);
+  else openFile(f);                    // 👈 بدال setPreview المباشر
+};
+
                     return (
                       <motion.li
                         key={f.id}

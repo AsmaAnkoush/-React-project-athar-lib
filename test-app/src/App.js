@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Hero from './components/Hero';
 import MaterialsPage from './pages/SubjectList';
 import LabsPage from './pages/LabList';
+import FeedbackPrompt from "./components/FeedbackPrompt";
+
 
 function App() {
     return (
@@ -13,6 +15,8 @@ function App() {
                     <Route path="/labs" element={<LabsPage />} />
                 </Routes>
             </main>
+                  <FeedbackPrompt />
+
         </BrowserRouter>
     );
 }

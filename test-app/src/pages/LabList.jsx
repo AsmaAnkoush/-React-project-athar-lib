@@ -1,3 +1,4 @@
+
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -5,6 +6,26 @@ import {
   FileArchive, FileSpreadsheet, FileAudio2, FileVideo2, Presentation,
   X, Zap, ChevronLeft, ChevronRight, Upload
 } from "lucide-react";
+// ==== Feedback trigger helper ====
+const LS_TRIGGER_KEY = "eleclib_feedback_trigger";
+const LS_COUNT_KEY   = "eleclib_feedback_open_count";
+
+function bumpFeedbackCounterAndTrigger() {
+  try {
+    // لو جاهز أصلاً، ما نعيد
+    if (localStorage.getItem(LS_TRIGGER_KEY) === "1") return;
+
+    const n = parseInt(localStorage.getItem(LS_COUNT_KEY) || "0", 10) + 1;
+    localStorage.setItem(LS_COUNT_KEY, String(n));
+
+    if (n >= 7) {
+      localStorage.setItem(LS_TRIGGER_KEY, "1");
+      // حتى يفتح المودال فوراً بدون ريفرش
+      window.dispatchEvent(new Event("eleclib:feedback"));
+    }
+  } catch {}
+}
+
 
 /* ===================== إعدادات Google Drive ===================== */
 const API_KEY = "AIzaSyA_yt7VNybzoM2GNsqgl196TefA8uT33Qs";
@@ -208,10 +229,11 @@ export default function LabsPage() {
     fetchFolder();
   }, [pathStack]);
 
-  function openFolder(folder) {
-    setPathStack((prev) => [...prev, { id: folder.id, name: folder.name }]);
-    window.history.pushState({ type: "folder", id: folder.id }, "");
-  }
+ function openFolder(folder) {
+  setPathStack((prev) => [...prev, { id: folder.id, name: folder.name }]);
+  window.history.pushState({ type: "folder", id: folder.id }, "");
+}
+
   function goToLevel(index) {
     setPathStack((prev) => prev.slice(0, index + 1));
     window.history.pushState({ type: "breadcrumb", depth: index }, "");
@@ -234,14 +256,16 @@ export default function LabsPage() {
   }, [preview, navigableImages]);
 
   // افتح المعاينة: احفظ مكان التمرير وادفع history مرة واحدة فقط
-  function openPreview(f) {
-    scrollYRef.current = window.scrollY || 0;
-    if (!previewPushedRef.current) {
-      window.history.pushState({ type: "preview", id: f.id }, "");
-      previewPushedRef.current = true;
-    }
-    setPreview(f);
+ function openPreview(f) {
+  scrollYRef.current = window.scrollY || 0;
+  if (!previewPushedRef.current) {
+    window.history.pushState({ type: "preview", id: f.id }, "");
+    previewPushedRef.current = true;
   }
+  setPreview(f);
+  bumpFeedbackCounterAndTrigger();     // 👈 هون
+}
+
 
   // أغلق كل المعاينات (X أو Esc) + ارجع لنفس مكان التمرير
   function closePreviewAll() {
