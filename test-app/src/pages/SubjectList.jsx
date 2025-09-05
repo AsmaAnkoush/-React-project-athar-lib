@@ -287,14 +287,7 @@ function openFile(f) {
     setPreview(arr[next]);
   }, [preview, navigableImages]);
 
-  function openPreview(f) {
-    scrollYRef.current = window.scrollY || 0;
-    if (!previewPushedRef.current) {
-      window.history.pushState({ view: "preview", id: f.id }, "");
-      previewPushedRef.current = true;
-    }
-    setPreview(f);
-  }
+  
 
   function closePreviewAll() {
     setPreview(null);
