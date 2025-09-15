@@ -210,15 +210,33 @@ export default function AllSubjects() {
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, [preview, pathStack.length, selectedSubject]);
-
-  function backOne() {
-    if (window.history.length > 1) window.history.back();
-    else {
-      if (preview) { setPreview(null); previewPushedRef.current = false; window.scrollTo(0, scrollYRef.current || 0); return; }
-      if (pathStack.length > 1) { setPathStack((p) => p.slice(0, -1)); return; }
-      if (selectedSubject) { resetAll(); return; }
-    }
+function backOne() {
+  // 1) لو في preview مفتوح → رجعه أول شيء
+  if (preview) {
+    setPreview(null);
+    previewPushedRef.current = false;
+    window.scrollTo(0, scrollYRef.current || 0);
+    return;
   }
+
+  // 2) لو في أكثر من path بالـ stack → ارجع خطوة
+  if (pathStack.length > 1) {
+    setPathStack((p) => p.slice(0, -1));
+    return;
+  }
+
+  // 3) لو في subject محدد → اعمله reset
+  if (selectedSubject) {
+    resetAll();
+    return;
+  }
+
+  // 4) أخيرًا جرب window.history بس مع شرط أقوى
+  if (window.history.state !== null && window.history.length > 1) {
+    window.history.back();
+  }
+}
+
 
   const subjectsList = useMemo(() => {
     const q = search.trim().toLowerCase();

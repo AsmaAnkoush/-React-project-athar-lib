@@ -188,14 +188,32 @@ export default function LabsPage() {
     return () => window.removeEventListener("popstate", onPop);
   }, [preview, pathStack.length, selectedLab]);
 
-  function backOne() {
-    if (window.history.length > 1) window.history.back();
-    else {
-      if (preview) { setPreview(null); previewPushedRef.current = false; window.scrollTo(0, scrollYRef.current || 0); return; }
-      if (pathStack.length > 1) { setPathStack((p) => p.slice(0, -1)); return; }
-      if (selectedLab) { resetAll(); return; }
-    }
+ function backOne() {
+  // 1) preview أول أولوية
+  if (preview) {
+    closePreviewAll();
+    return;
   }
+
+  // 2) pathStack ثاني
+  if (pathStack.length > 1) {
+    setPathStack((p) => p.slice(0, -1));
+    return;
+  }
+
+  // 3) selectedLab ثالث
+  if (selectedLab) {
+    resetAll();
+    return;
+  }
+
+  // 4) أخيرًا history
+  if (window.history.state !== null && window.history.length > 1) {
+    window.history.back();
+  }
+}
+
+
 
   /* ===== اختيار لاب ===== */
   function handleSelectLab(lab) {
