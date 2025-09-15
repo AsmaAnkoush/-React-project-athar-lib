@@ -174,21 +174,14 @@ export default function LabsPage() {
 
   // استجابة زر Back في المتصفح
   useEffect(() => {
-    const onPop = () => {
-      if (preview) {
-        setPreview(null);
-        previewPushedRef.current = false;
-        window.scrollTo(0, scrollYRef.current || 0);
-        return;
-      }
-      if (pathStack.length > 1) { setPathStack((p) => p.slice(0, -1)); return; }
-      if (selectedLab) { resetAll(); return; }
-    };
-    window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
-  }, [preview, pathStack.length, selectedLab]);
+  const onPop = () => {
+    backOne(); // كل محاولة للرجوع تمر على نفس المنطق
+  };
+  window.addEventListener("popstate", onPop);
+  return () => window.removeEventListener("popstate", onPop);
+}, [preview, pathStack.length, selectedLab]);
 
- function backOne() {
+function backOne() {
   // 1) preview أول أولوية
   if (preview) {
     closePreviewAll();
@@ -215,74 +208,30 @@ export default function LabsPage() {
 
 
 
+
   /* ===== اختيار لاب ===== */
   function handleSelectLab(lab) {
-    if (!lab?.id) return;
-    setSelectedLab(lab);
-    setPathStack([{ id: lab.id, name: lab.name }]);
-    window.history.pushState({ type: "lab", id: lab.id }, "");
-  }
-
-  /* ===== تحميل العناصر للمجلد الحالي ===== */
-  useEffect(() => {
-    async function fetchFolder() {
-      if (!pathStack.length) return;
-      setLoading(true); setErr("");
-      const currentId = pathStack[pathStack.length - 1].id;
-      try {
-        const files = await listChildren({ parentId: currentId, onlyFolders: false });
-        const sorted = files.slice().sort((a, b) => {
-          if (isFolder(a.mimeType) && !isFolder(b.mimeType)) return -1;
-          if (!isFolder(a.mimeType) && isFolder(b.mimeType)) return 1;
-          return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
-        });
-        setItems(sorted);
-      } catch (e) {
-        console.error("Folder fetch failed:", e);
-        setErr("فشل تحميل محتويات المجلد من Google Drive. تحقق من العلنية وصلاحيات المفتاح.");
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchFolder();
-  }, [pathStack]);
-
- function openFolder(folder) {
-  setPathStack((prev) => [...prev, { id: folder.id, name: folder.name }]);
-  window.history.pushState({ type: "folder", id: folder.id }, "");
+  if (!lab?.id) return;
+  setSelectedLab(lab);
+  setPathStack([{ id: lab.id, name: lab.name }]);
+  window.history.pushState({ type: "lab", id: lab.id }, ""); // ✅
 }
 
-  function goToLevel(index) {
-    setPathStack((prev) => prev.slice(0, index + 1));
-    window.history.pushState({ type: "breadcrumb", depth: index }, "");
-  }
+function openFolder(folder) {
+  setPathStack((prev) => [...prev, { id: folder.id, name: folder.name }]);
+  window.history.pushState({ type: "folder", id: folder.id }, ""); // ✅
+}
 
-  /* ===== Preview ===== */
-  // للتنقّل بالكيبورد: بين الصور فقط
-  const navigableImages = useMemo(
-    () => items.filter((f) => !isFolder(f.mimeType) && isImageFile(f)),
-    [items]
-  );
-
-  const navAny = useCallback((dir) => {
-    if (!preview || !isImageFile(preview)) return;
-    const arr = navigableImages;
-    const idx = arr.findIndex((x) => x.id === preview.id);
-    if (idx === -1 || arr.length === 0) return;
-    const next = dir === "prev" ? (idx - 1 + arr.length) % arr.length : (idx + 1) % arr.length;
-    setPreview(arr[next]);
-  }, [preview, navigableImages]);
-
-  // افتح المعاينة: احفظ مكان التمرير وادفع history مرة واحدة فقط
- function openPreview(f) {
+function openPreview(f) {
   scrollYRef.current = window.scrollY || 0;
   if (!previewPushedRef.current) {
-    window.history.pushState({ type: "preview", id: f.id }, "");
+    window.history.pushState({ type: "preview", id: f.id }, ""); // ✅
     previewPushedRef.current = true;
   }
   setPreview(f);
-  bumpFeedbackCounterAndTrigger();     // 👈 هون
+  bumpFeedbackCounterAndTrigger();
 }
+
 
 
   // أغلق كل المعاينات (X أو Esc) + ارجع لنفس مكان التمرير
