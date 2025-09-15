@@ -206,6 +206,23 @@ function backOne() {
   }
 }
 
+const navigableImages = useMemo(() => {
+  return items.filter(f => !isFolder(f.mimeType) && isImageFile(f));
+}, [items]);
+
+const navAny = useCallback((dir) => {
+  if (!preview || !isImageFile(preview)) return;
+  const arr = navigableImages;
+  const idx = arr.findIndex(x => x.id === preview.id);
+  if (idx === -1 || arr.length === 0) return;
+  const next = dir === "prev" ? (idx - 1 + arr.length) % arr.length : (idx + 1) % arr.length;
+  setPreview(arr[next]);
+}, [preview, navigableImages]);
+
+function goToLevel(index) {
+  setPathStack(prev => prev.slice(0, index + 1));
+  window.history.pushState({ type: "breadcrumb", depth: index }, "");
+}
 
 
 
