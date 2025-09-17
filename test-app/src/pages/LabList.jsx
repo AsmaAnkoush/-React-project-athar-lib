@@ -1,4 +1,3 @@
-
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -177,7 +176,7 @@ export default function LabsPage() {
     const onPop = () => {
       if (preview) {
         setPreview(null);
-        previewPushedRef.current = false;
+        previewPushedRef.current = false; // ✅ مهم: صفّر العلم عند إغلاق المعاينة عبر popstate
         window.scrollTo(0, scrollYRef.current || 0);
         return;
       }
@@ -189,11 +188,24 @@ export default function LabsPage() {
   }, [preview, pathStack.length, selectedLab]);
 
   function backOne() {
-    if (window.history.length > 1) window.history.back();
-    else {
-      if (preview) { setPreview(null); previewPushedRef.current = false; window.scrollTo(0, scrollYRef.current || 0); return; }
-      if (pathStack.length > 1) { setPathStack((p) => p.slice(0, -1)); return; }
-      if (selectedLab) { resetAll(); return; }
+    // ✅ 1) إذا في معاينة: سكّرها محليًا أولاً
+    if (preview) {
+      closePreviewAll();
+      return;
+    }
+    // ✅ 2) إذا داخل هيراركي المجلدات: ارجع مستوى واحد محليًا
+    if (pathStack.length > 1) {
+      setPathStack((p) => p.slice(0, -1));
+      return;
+    }
+    // ✅ 3) إذا داخل لاب: ارجع للواجهة الرئيسية محليًا
+    if (selectedLab) {
+      resetAll();
+      return;
+    }
+    // ✅ 4) آخر خيار: استخدم history فقط إذا ما في شيء ترجع له محليًا
+    if (window.history.length > 1) {
+      window.history.back();
     }
   }
 
@@ -229,10 +241,10 @@ export default function LabsPage() {
     fetchFolder();
   }, [pathStack]);
 
- function openFolder(folder) {
-  setPathStack((prev) => [...prev, { id: folder.id, name: folder.name }]);
-  window.history.pushState({ type: "folder", id: folder.id }, "");
-}
+  function openFolder(folder) {
+    setPathStack((prev) => [...prev, { id: folder.id, name: folder.name }]);
+    window.history.pushState({ type: "folder", id: folder.id }, "");
+  }
 
   function goToLevel(index) {
     setPathStack((prev) => prev.slice(0, index + 1));
@@ -256,23 +268,20 @@ export default function LabsPage() {
   }, [preview, navigableImages]);
 
   // افتح المعاينة: احفظ مكان التمرير وادفع history مرة واحدة فقط
- function openPreview(f) {
-  scrollYRef.current = window.scrollY || 0;
-  if (!previewPushedRef.current) {
-    window.history.pushState({ type: "preview", id: f.id }, "");
-    previewPushedRef.current = true;
+  function openPreview(f) {
+    scrollYRef.current = window.scrollY || 0;
+    if (!previewPushedRef.current) {
+      window.history.pushState({ type: "preview", id: f.id }, "");
+      previewPushedRef.current = true;
+    }
+    setPreview(f);
+    bumpFeedbackCounterAndTrigger();     // 👈 هون
   }
-  setPreview(f);
-  bumpFeedbackCounterAndTrigger();     // 👈 هون
-}
-
 
   // أغلق كل المعاينات (X أو Esc) + ارجع لنفس مكان التمرير
   function closePreviewAll() {
     setPreview(null);
-    if (previewPushedRef.current) {
-      window.history.back();
-    }
+    // ✅ لا تقم باستدعاء history.back() هنا لتجنب التعارض على iOS
     previewPushedRef.current = false;
     setTimeout(() => window.scrollTo(0, scrollYRef.current || 0), 0);
   }

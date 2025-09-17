@@ -210,33 +210,28 @@ export default function AllSubjects() {
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, [preview, pathStack.length, selectedSubject]);
-function backOne() {
-  // 1) لو في preview مفتوح → رجعه أول شيء
-  if (preview) {
-    setPreview(null);
-    previewPushedRef.current = false;
-    window.scrollTo(0, scrollYRef.current || 0);
-    return;
-  }
 
-  // 2) لو في أكثر من path بالـ stack → ارجع خطوة
-  if (pathStack.length > 1) {
-    setPathStack((p) => p.slice(0, -1));
-    return;
+  function backOne() {
+    // 1) إذا في معاينة: سكّرها محليًا
+    if (preview) {
+      closePreviewAll();
+      return;
+    }
+    // 2) إذا داخل تدرّج المجلدات: ارجع مستوى واحد محليًا
+    if (pathStack.length > 1) {
+      setPathStack((p) => p.slice(0, -1));
+      return;
+    }
+    // 3) إذا داخل مادة مختارة: ارجع للواجهة الرئيسية
+    if (selectedSubject) {
+      resetAll();
+      return;
+    }
+    // 4) آخر خيار: history.back فقط إذا ما في شي محلي ترجع له
+    if (window.history.length > 1) {
+      window.history.back();
+    }
   }
-
-  // 3) لو في subject محدد → اعمله reset
-  if (selectedSubject) {
-    resetAll();
-    return;
-  }
-
-  // 4) أخيرًا جرب window.history بس مع شرط أقوى
-  if (window.history.state !== null && window.history.length > 1) {
-    window.history.back();
-  }
-}
-
 
   const subjectsList = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -274,16 +269,21 @@ function backOne() {
     fetchFolder();
   }, [pathStack]);
 
- function openFolder(folder) {
-  setPathStack((prev) => [...prev, { id: folder.id, name: folder.name }]);
-  window.history.pushState({ view: "folder", id: folder.id }, "");
-}
-function openFile(f) {
-  setPreview(f);
-  window.history.pushState({ view: "preview", id: f.id }, "");
-  bumpFeedbackCounterAndTrigger();     // 👈 هون
-}
+  function openFolder(folder) {
+    setPathStack((prev) => [...prev, { id: folder.id, name: folder.name }]);
+    window.history.pushState({ view: "folder", id: folder.id }, "");
+  }
 
+  function openFile(f) {
+    // افتح المعاينة مع إدارة history والتمرير بشكل آمن
+    scrollYRef.current = window.scrollY || 0;
+    if (!previewPushedRef.current) {
+      window.history.pushState({ view: "preview", id: f.id }, "");
+      previewPushedRef.current = true;
+    }
+    setPreview(f);
+    bumpFeedbackCounterAndTrigger();     // 👈 هون
+  }
 
   function goToLevel(index) {
     setPathStack((prev) => prev.slice(0, index + 1));
@@ -305,13 +305,9 @@ function openFile(f) {
     setPreview(arr[next]);
   }, [preview, navigableImages]);
 
-  
-
   function closePreviewAll() {
     setPreview(null);
-    if (previewPushedRef.current) {
-      window.history.back();
-    }
+    // لا نستخدم history.back هنا لتجنّب التعارض مع iOS/iframe
     previewPushedRef.current = false;
     setTimeout(() => window.scrollTo(0, scrollYRef.current || 0), 0);
   }
@@ -488,10 +484,10 @@ function openFile(f) {
                   {items.map((f) => {
                     const { Icon, tone } = pickIcon({ mime: f.mimeType, isFolderFlag: isFolder(f.mimeType), name: f.name });
                     const isDir = isFolder(f.mimeType);
-const onClick = () => {
-  if (isDir) openFolder(f);
-  else openFile(f);                    // 👈 بدال setPreview المباشر
-};
+                    const onClick = () => {
+                      if (isDir) openFolder(f);
+                      else openFile(f);                    // 👈 بدال setPreview المباشر
+                    };
 
                     return (
                       <motion.li
