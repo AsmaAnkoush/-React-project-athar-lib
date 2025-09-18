@@ -28,24 +28,37 @@ export default function FeedbackPrompt() {
     return () => window.removeEventListener("eleclib:feedback", tryOpen);
   }, []);
 
-  // Dynamic message and image based on stars
- const verdict = useMemo(() => {
-  switch (stars) {
-    case 1:
-      return { img: "/feedback/66.png", msg: "يا ساتر! 😱 نجمة وحدة؟ طمنا شو اللي صار؟" };
-    case 2:
-      return { img: "/feedback/33.png", msg: "يعني مو أسوأ شي 🤏 بس كيف نخليها 5 نجوم؟" };
-    case 3:
-return { img: "/feedback/44.png", msg: " 👌 شو ناقص المكتبة عشان يصير تقييمك 4 نجوم" };
-    case 4:
-      return { img: "/feedback/22.png", msg: "😎 قربنا إنها تعجبك 5/5 " };
-    case 5:
-      return { img: "/feedback/5555.png", msg:"حلووووووووووو إنها أعجبتك ,, شكراً كثيراً ❤️❤️❤️" };
-    default:
-      return { img: "/feedback/9.png", msg: "قيّم تجربتك للموقع معنا" };
-  }
-}, [stars]);
+  // ⛔️ منع الإغلاق بـ Escape قبل اختيار النجوم
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (!open) return;
+      if (e.key === "Escape" && stars === 0) {
+        e.preventDefault();
+        e.stopPropagation();
+        setError("اختر التقييم أولاً قبل إغلاق النافذة.");
+      }
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [open, stars]);
 
+  // Dynamic message and image based on stars
+  const verdict = useMemo(() => {
+    switch (stars) {
+      case 1:
+        return { img: "/feedback/66.png", msg: "يا ساتر! 😱 نجمة وحدة؟ طمنا شو اللي صار؟" };
+      case 2:
+        return { img: "/feedback/33.png", msg: "يعني مو أسوأ شي 🤏 بس كيف نخليها 5 نجوم؟" };
+      case 3:
+        return { img: "/feedback/44.png", msg: " 👌 شو ناقص المكتبة عشان يصير تقييمك 4 نجوم" };
+      case 4:
+        return { img: "/feedback/22.png", msg: "😎 قربنا إنها تعجبك 5/5 " };
+      case 5:
+        return { img: "/feedback/5555.png", msg: "حلووووووووووو إنها أعجبتك ,, شكراً كثيراً ❤️❤️❤️" };
+      default:
+        return { img: "/feedback/9.png", msg: "قيّم تجربتك للموقع معنا" };
+    }
+  }, [stars]);
 
   async function handleSubmit(e) {
     e?.preventDefault?.();
@@ -54,9 +67,9 @@ return { img: "/feedback/44.png", msg: " 👌 شو ناقص المكتبة عش�
     if (!stars) { setError("Please select a star rating."); return; }
 
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    if (!email || !emailRegex.test(email)) { 
-      setError("A valid email is required."); 
-      return; 
+    if (!email || !emailRegex.test(email)) {
+      setError("A valid email is required.");
+      return;
     }
 
     setSending(true);
@@ -83,10 +96,21 @@ return { img: "/feedback/44.png", msg: " 👌 شو ناقص المكتبة عش�
   return (
     <div className="fixed inset-0 z-[1000] grid place-items-center bg-black/50 backdrop-blur-sm px-4">
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-neutral-900 p-5 shadow-2xl text-white relative">
+        {/* زر الإغلاق: لا يسمح بالإغلاق قبل اختيار النجوم */}
         <button
-          className="absolute top-3 left-3 p-2 rounded-lg bg-white/10 hover:bg-white/20"
-          onClick={() => setOpen(false)}
-          title="Close"
+          className={`absolute top-3 left-3 p-2 rounded-lg 
+            ${stars === 0
+              ? "bg-white/10 text-white/40 cursor-not-allowed"
+              : "bg-white/10 hover:bg-white/20"}`}
+          onClick={() => {
+            if (stars === 0) {
+              setError("اختر التقييم أولاً قبل إغلاق النافذة.");
+              return;
+            }
+            setOpen(false);
+          }}
+          title={stars === 0 ? "اختر التقييم أولاً" : "Close"}
+          aria-disabled={stars === 0}
         >
           <X size={16} />
         </button>
@@ -95,7 +119,7 @@ return { img: "/feedback/44.png", msg: " 👌 شو ناقص المكتبة عش�
         <p className="text-center text-slate-300 mb-4">Your feedback helps us improve ElecLib</p>
 
         <div className="flex items-center justify-center gap-1 mb-3">
-          {[1,2,3,4,5].map((n) => (
+          {[1, 2, 3, 4, 5].map((n) => (
             <button
               key={n}
               type="button"
@@ -137,7 +161,7 @@ return { img: "/feedback/44.png", msg: " 👌 شو ناقص المكتبة عش�
             />
           </div>
 
-          {error && <div className="text-red-300 text-sm">{error}</div>}
+        {error && <div className="text-red-300 text-sm">{error}</div>}
 
           {!sent ? (
             <button
