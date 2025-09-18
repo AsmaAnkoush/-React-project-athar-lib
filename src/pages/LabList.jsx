@@ -1,3 +1,4 @@
+
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -5,7 +6,6 @@ import {
   FileArchive, FileSpreadsheet, FileAudio2, FileVideo2, Presentation,
   X, Zap, ChevronLeft, ChevronRight, Upload
 } from "lucide-react";
-
 // ==== Feedback trigger helper ====
 const LS_TRIGGER_KEY = "eleclib_feedback_trigger";
 const LS_COUNT_KEY   = "eleclib_feedback_open_count";
@@ -25,6 +25,7 @@ function bumpFeedbackCounterAndTrigger() {
     }
   } catch {}
 }
+
 
 /* ===================== إعدادات Google Drive ===================== */
 const API_KEY = "AIzaSyA_yt7VNybzoM2GNsqgl196TefA8uT33Qs";
@@ -173,49 +174,27 @@ export default function LabsPage() {
 
   // استجابة زر Back في المتصفح
   useEffect(() => {
-    const onPop = (e) => {
-      console.log("Popstate triggered", { state: e.state, preview, pathStack, selectedLab });
+    const onPop = () => {
       if (preview) {
         setPreview(null);
         previewPushedRef.current = false;
         window.scrollTo(0, scrollYRef.current || 0);
         return;
       }
-      if (pathStack.length > 1) {
-        setPathStack((p) => p.slice(0, -1));
-        return;
-      }
-      if (selectedLab) {
-        resetAll();
-        return;
-      }
+      if (pathStack.length > 1) { setPathStack((p) => p.slice(0, -1)); return; }
+      if (selectedLab) { resetAll(); return; }
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
-  }, [preview, pathStack, selectedLab]);
+  }, [preview, pathStack.length, selectedLab]);
 
   function backOne() {
-    setTimeout(() => {
-      if (preview) {
-        setPreview(null);
-        previewPushedRef.current = false;
-        window.scrollTo(0, scrollYRef.current || 0);
-        window.history.pushState({ type: "lab", id: selectedLab?.id || "" }, "", window.location.pathname);
-        return;
-      }
-      if (pathStack.length > 1) {
-        setPathStack((p) => p.slice(0, -1));
-        const prevFolder = pathStack[pathStack.length - 2];
-        window.history.pushState({ type: "folder", id: prevFolder.id }, "", window.location.pathname);
-        return;
-      }
-      if (selectedLab) {
-        resetAll();
-        window.history.pushState({ type: "home" }, "", "/");
-        return;
-      }
-      window.history.pushState({ type: "home" }, "", "/");
-    }, 0);
+    if (window.history.length > 1) window.history.back();
+    else {
+      if (preview) { setPreview(null); previewPushedRef.current = false; window.scrollTo(0, scrollYRef.current || 0); return; }
+      if (pathStack.length > 1) { setPathStack((p) => p.slice(0, -1)); return; }
+      if (selectedLab) { resetAll(); return; }
+    }
   }
 
   /* ===== اختيار لاب ===== */
@@ -250,10 +229,10 @@ export default function LabsPage() {
     fetchFolder();
   }, [pathStack]);
 
-  function openFolder(folder) {
-    setPathStack((prev) => [...prev, { id: folder.id, name: folder.name }]);
-    window.history.pushState({ type: "folder", id: folder.id }, "");
-  }
+ function openFolder(folder) {
+  setPathStack((prev) => [...prev, { id: folder.id, name: folder.name }]);
+  window.history.pushState({ type: "folder", id: folder.id }, "");
+}
 
   function goToLevel(index) {
     setPathStack((prev) => prev.slice(0, index + 1));
@@ -277,15 +256,16 @@ export default function LabsPage() {
   }, [preview, navigableImages]);
 
   // افتح المعاينة: احفظ مكان التمرير وادفع history مرة واحدة فقط
-  function openPreview(f) {
-    scrollYRef.current = window.scrollY || 0;
-    if (!previewPushedRef.current) {
-      window.history.pushState({ type: "preview", id: f.id }, "");
-      previewPushedRef.current = true;
-    }
-    setPreview(f);
-    bumpFeedbackCounterAndTrigger();
+ function openPreview(f) {
+  scrollYRef.current = window.scrollY || 0;
+  if (!previewPushedRef.current) {
+    window.history.pushState({ type: "preview", id: f.id }, "");
+    previewPushedRef.current = true;
   }
+  setPreview(f);
+  bumpFeedbackCounterAndTrigger();     // 👈 هون
+}
+
 
   // أغلق كل المعاينات (X أو Esc) + ارجع لنفس مكان التمرير
   function closePreviewAll() {
@@ -337,25 +317,25 @@ export default function LabsPage() {
 
       <main className="relative z-10 w-full max-w-6xl text-white py-10">
         <h2
-          className="
-            text-4xl md:text-5xl font-extrabold tracking-tight leading-tight
-            bg-gradient-to-r from-orange-400 via-orange-500 to-amber-300
-            text-transparent bg-clip-text
-            drop-shadow-[0_6px_20px_rgba(251,146,60,0.35)]
-            text-center
-          "
-        >
-          Electrical Engineering Labs aaaaaaaaaaaaaaaaaaaaa
-        </h2>
+  className="
+    text-4xl md:text-5xl font-extrabold tracking-tight leading-tight
+    bg-gradient-to-r from-orange-400 via-orange-500 to-amber-300
+    text-transparent bg-clip-text
+    drop-shadow-[0_6px_20px_rgba(251,146,60,0.35)]
+    text-center
+  "
+>
+  Electrical Engineering Labs
+</h2>
+
+
 
         {/* زر رجوع على الصفحة الرئيسية للّابات */}
         {!selectedLab && (
           <div className="mb-4 flex justify-start">
             <button
               onClick={backOne}
-              onTouchStart={backOne}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition"
-              style={{ touchAction: "manipulation" }}
               title="Back"
             >
               <ChevronLeft size={18} />
@@ -438,9 +418,7 @@ export default function LabsPage() {
             <div className="mb-4">
               <button
                 onClick={backOne}
-                onTouchStart={backOne}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition"
-                style={{ touchAction: "manipulation" }}
                 title="Back"
               >
                 <ChevronLeft size={18} />
@@ -537,9 +515,10 @@ export default function LabsPage() {
 
           {/* الدعاء */}
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm leading-relaxed text-slate-100" dir="rtl">
-            <div className="text-orange-400 font-semibold mb-2 text-center">
-              وأنت بتدرس، لا تنسى أهلنا في غزة
-            </div>
+           <div className="text-orange-400 font-semibold mb-2 text-center">
+  وأنت بتدرس، لا تنسى أهلنا في غزة
+</div>
+
             <p className="whitespace-pre-line">
               اللهم يا رحيم، يا قوي، يا جبار، كن لأهل غزة عونًا ونصيرًا، اللهم احفظهم بحفظك، وأمنهم بأمانك، واشفِ جرحاهم،
               وتقبل شهداءهم، واربط على قلوبهم، وأبدل خوفهم أمنًا، وحزنهم فرحًا، وضعفهم قوة، اللهم عجّل لهم بالفرج والنصر المبين،
@@ -550,15 +529,15 @@ export default function LabsPage() {
           {/* Upload File */}
           <div className="flex justify-center">
             <a
-              href={FORM_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-2 px-5 py-3 rounded-xl bg-orange-400 hover:bg-orange-500 text-white text-sm transition"
-              title="Upload to Pending"
-            >
-              <Upload size={16} />
-              Upload File
-            </a>
+            href={FORM_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-2 px-5 py-3 rounded-xl bg-orange-400 hover:bg-orange-500 text-white text-sm transition"
+            title="Upload to Pending"
+          >
+            <Upload size={16} />
+            Upload File
+          </a>
           </div>
 
           <p className="text-center text-xs text-slate-300">© 2025 - ElecLib</p>
