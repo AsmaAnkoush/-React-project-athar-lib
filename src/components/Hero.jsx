@@ -103,21 +103,26 @@ export default function Hero() {
       <div className="relative z-10 w-full flex justify-center">
         <div className="bg-black/30 sm:bg-gradient-to-br sm:from-neutral-800 sm:to-neutral-900 backdrop-blur-sm sm:backdrop-blur-lg text-white rounded-2xl shadow-2xl w-full max-w-[92%] sm:max-w-3xl px-4 sm:px-10 py-4 sm:py-14 space-y-5 sm:space-y-8 text-center border border-white/10">
           <h1 className="text-4xl md:text-4xl font-extrabold leading-tight tracking-tight drop-shadow">
-            <span className="text-orange-400">ElecLib</span>
-            <span
-              className="
-                relative
-                text-transparent bg-clip-text
-                bg-gradient-to-r from-white via-white to-orange-200
-                font-extrabold
-                drop-shadow-[0_4px_14px_rgba(251,146,60,0.35)]
-                after:content-[''] after:absolute after:inset-x-0 after:-bottom-1.5 after:h-[3px]
-                after:bg-gradient-to-r after:from-orange-400/0 after:via-orange-400/70 after:to-orange-400/0
-                after:rounded-full
-              "
-            >
-              – مكتبة الهندسة الكهربائية
-            </span>
+<h1 className="relative text-5xl sm:text-5xl font-extrabold text-orange-400">
+  <span className="relative z-10">ElecLib</span>
+  <span className="absolute inset-0 z-0 text-orange-300 animate-glitch translate-x-[2px]">ElecLib</span>
+  <span className="absolute inset-0 z-0 text-rose-400 animate-glitch -translate-x-[2px]">ElecLib</span>
+</h1>
+
+          <span
+className="
+relative
+text-transparent bg-clip-text
+bg-gradient-to-r from-white via-white to-orange-200
+font-extrabold
+drop-shadow-[0_4px_14px_rgba(251,146,60,0.35)]
+after:content-[''] after:absolute after:inset-x-0 after:-bottom-1.5 after:h-[3px]
+after:bg-gradient-to-r after:from-orange-400/0 after:via-orange-400/70 after:to-orange-400/0
+after:rounded-full
+"
+>
+ مكتبة الهندسة الكهربائية
+</span>
           </h1>
 
           <p className="text-base sm:text-xl text-slate-200/90 leading-relaxed">
