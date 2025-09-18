@@ -345,7 +345,7 @@ export default function LabsPage() {
             text-center
           "
         >
-          Electrical Engineering Labs
+          Electrical Engineering Labs aaaaaaaaaaaaaaaaaaaaa
         </h2>
 
         {/* زر رجوع على الصفحة الرئيسية للّابات */}
