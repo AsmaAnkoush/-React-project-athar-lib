@@ -1,4 +1,3 @@
-
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -6,26 +5,22 @@ import {
   FileArchive, FileSpreadsheet, FileAudio2, FileVideo2, Presentation,
   X, Zap, ChevronLeft, ChevronRight, Upload
 } from "lucide-react";
-// ==== Feedback trigger helper ====
+
+/* ===================== Feedback trigger helper ===================== */
 const LS_TRIGGER_KEY = "eleclib_feedback_trigger";
 const LS_COUNT_KEY   = "eleclib_feedback_open_count";
 
 function bumpFeedbackCounterAndTrigger() {
   try {
-    // لو جاهز أصلاً، ما نعيد
     if (localStorage.getItem(LS_TRIGGER_KEY) === "1") return;
-
     const n = parseInt(localStorage.getItem(LS_COUNT_KEY) || "0", 10) + 1;
     localStorage.setItem(LS_COUNT_KEY, String(n));
-
     if (n >= 7) {
       localStorage.setItem(LS_TRIGGER_KEY, "1");
-      // حتى يفتح المودال فوراً بدون ريفرش
       window.dispatchEvent(new Event("eleclib:feedback"));
     }
   } catch {}
 }
-
 
 /* ===================== إعدادات Google Drive ===================== */
 const API_KEY = "AIzaSyA_yt7VNybzoM2GNsqgl196TefA8uT33Qs";
@@ -50,14 +45,12 @@ function fileTypeLabel(f) {
 /** رابط تنزيل موحّد يعمل لكل الأنواع (صور/ملفات مباشرة/مستندات Google) */
 function getUniversalDownloadLink(file) {
   if (!file) return null;
-  // مستندات Google (Docs/Sheets/Slides...) — نعمل export PDF
   if (file.mimeType?.startsWith("application/vnd.google-apps")) {
     const exportMime = "application/pdf";
     return `https://www.googleapis.com/drive/v3/files/${file.id}/export?mimeType=${encodeURIComponent(exportMime)}&key=${API_KEY}`;
+    // ملاحظة: ممكن تبدّل PDF بأنواع أخرى حسب النوع
   }
-  // إن وجد رابط مباشر من API
   if (file.webContentLink) return file.webContentLink;
-  // باقي الأنواع (صور/فيديو/Zip...) — رابط uc موثوق
   return `https://drive.google.com/uc?export=download&id=${file.id}`;
 }
 
@@ -86,7 +79,7 @@ function highlightMatch(text, query) {
   const regex = new RegExp(`(${escapeRegExp(q)})`, "ig");
   const parts = String(text).split(regex);
   return parts.map((part, i) =>
-    regex.test(part)
+    part.toLowerCase() === q.toLowerCase()
       ? <span key={i} className="bg-yellow-400/40 text-yellow-100 px-1 rounded">{part}</span>
       : <span key={i}>{part}</span>
   );
@@ -138,6 +131,9 @@ export default function LabsPage() {
   const previewPushedRef = useRef(false);
   const scrollYRef = useRef(0);
 
+  // قفل النقرات السريعة على زر الرجوع في الواجهة
+  const backBusyRef = useRef(false);
+
   /* ===== تحميل مجلدات اللابات من مجلد الجذر ===== */
   useEffect(() => {
     async function fetchLabs() {
@@ -172,7 +168,7 @@ export default function LabsPage() {
     previewPushedRef.current = false;
   }
 
-  // استجابة زر Back في المتصفح
+  // استجابة زر Back في المتصفح (للـ history فقط)
   useEffect(() => {
     const onPop = () => {
       if (preview) {
@@ -188,13 +184,44 @@ export default function LabsPage() {
     return () => window.removeEventListener("popstate", onPop);
   }, [preview, pathStack.length, selectedLab]);
 
-  function backOne() {
-    if (window.history.length > 1) window.history.back();
-    else {
-      if (preview) { setPreview(null); previewPushedRef.current = false; window.scrollTo(0, scrollYRef.current || 0); return; }
-      if (pathStack.length > 1) { setPathStack((p) => p.slice(0, -1)); return; }
-      if (selectedLab) { resetAll(); return; }
+  /* ==== زر الرجوع داخل الواجهة (UI Back) — لا يعتمد على history إلا كحل أخير ==== */
+  function backOneUI() {
+    if (backBusyRef.current) return;
+    backBusyRef.current = true;
+
+    // 1) إغلاق المعاينة إن كانت مفتوحة
+    if (preview) {
+      setPreview(null);
+      previewPushedRef.current = false;
+      requestAnimationFrame(() => window.scrollTo(0, scrollYRef.current || 0));
+      backBusyRef.current = false;
+      return;
     }
+
+    // 2) التراجع مستوى داخل المجلدات
+    if (pathStack.length > 1) {
+      setPathStack((p) => p.slice(0, -1));
+      backBusyRef.current = false;
+      return;
+    }
+
+    // 3) الرجوع من داخل مادة إلى صفحة جميع المواد
+    if (selectedLab) {
+      resetAll();
+      backBusyRef.current = false;
+      return;
+    }
+
+    // 4) أنت أصلاً على صفحة جميع المواد: لا شيء ترجع له محليًا
+    // جرّب history.back مرة واحدة فقط، ثم فك القفل.
+    let popped = false;
+    const onPopOnce = () => { popped = true; };
+    window.addEventListener("popstate", onPopOnce, { once: true });
+    history.back();
+    setTimeout(() => {
+      window.removeEventListener("popstate", onPopOnce);
+      backBusyRef.current = false;
+    }, 250);
   }
 
   /* ===== اختيار لاب ===== */
@@ -229,18 +256,18 @@ export default function LabsPage() {
     fetchFolder();
   }, [pathStack]);
 
- function openFolder(folder) {
-  setPathStack((prev) => [...prev, { id: folder.id, name: folder.name }]);
-  window.history.pushState({ type: "folder", id: folder.id }, "");
-}
+  function openFolder(folder) {
+    setPathStack((prev) => [...prev, { id: folder.id, name: folder.name }]);
+    window.history.pushState({ type: "folder", id: folder.id }, "");
+  }
 
   function goToLevel(index) {
     setPathStack((prev) => prev.slice(0, index + 1));
+    // إبقاء pushState كما هو (يمكن تحويله إلى replaceState لو حبيت تقليل خطوات الرجوع)
     window.history.pushState({ type: "breadcrumb", depth: index }, "");
   }
 
   /* ===== Preview ===== */
-  // للتنقّل بالكيبورد: بين الصور فقط
   const navigableImages = useMemo(
     () => items.filter((f) => !isFolder(f.mimeType) && isImageFile(f)),
     [items]
@@ -255,29 +282,24 @@ export default function LabsPage() {
     setPreview(arr[next]);
   }, [preview, navigableImages]);
 
-  // افتح المعاينة: احفظ مكان التمرير وادفع history مرة واحدة فقط
- function openPreview(f) {
-  scrollYRef.current = window.scrollY || 0;
-  if (!previewPushedRef.current) {
-    window.history.pushState({ type: "preview", id: f.id }, "");
-    previewPushedRef.current = true;
+  function openPreview(f) {
+    scrollYRef.current = window.scrollY || 0;
+    if (!previewPushedRef.current) {
+      window.history.pushState({ type: "preview", id: f.id }, "");
+      previewPushedRef.current = true;
+    }
+    setPreview(f);
+    bumpFeedbackCounterAndTrigger();
   }
-  setPreview(f);
-  bumpFeedbackCounterAndTrigger();     // 👈 هون
-}
 
-
-  // أغلق كل المعاينات (X أو Esc) + ارجع لنفس مكان التمرير
+  // إغلاق المعاينة محليًا (بدون history.back لتفادي “التعليق”)
   function closePreviewAll() {
     setPreview(null);
-    if (previewPushedRef.current) {
-      window.history.back();
-    }
     previewPushedRef.current = false;
-    setTimeout(() => window.scrollTo(0, scrollYRef.current || 0), 0);
+    requestAnimationFrame(() => window.scrollTo(0, scrollYRef.current || 0));
   }
 
-  // كيبورد: Esc يغلق كل المعاينات + أسهم للتنقّل بين الصور
+  // كيبورد: Esc يغلق المعاينة + أسهم للتنقّل بين الصور
   useEffect(() => {
     if (!preview) return;
     const onKeyDown = (e) => {
@@ -317,26 +339,25 @@ export default function LabsPage() {
 
       <main className="relative z-10 w-full max-w-6xl text-white py-10">
         <h2
-  className="
-    text-4xl md:text-5xl font-extrabold tracking-tight leading-tight
-    bg-gradient-to-r from-orange-400 via-orange-500 to-amber-300
-    text-transparent bg-clip-text
-    drop-shadow-[0_6px_20px_rgba(251,146,60,0.35)]
-    text-center
-  "
->
-  Electrical Engineering Labs
-</h2>
+          className="
+            text-4xl md:text-5xl font-extrabold tracking-tight leading-tight
+            bg-gradient-to-r from-orange-400 via-orange-500 to-amber-300
+            text-transparent bg-clip-text
+            drop-shadow-[0_6px_20px_rgba(251,146,60,0.35)]
+            text-center
+          "
+        >
+          Electrical Engineering Labs
+        </h2>
 
-
-
-        {/* زر رجوع على الصفحة الرئيسية للّابات */}
+        {/* زر رجوع على الصفحة الرئيسية للّابات (قد لا يكون له رجعة محلية) */}
         {!selectedLab && (
           <div className="mb-4 flex justify-start">
             <button
-              onClick={backOne}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition"
+              onClick={backOneUI}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
               title="Back"
+              disabled={!!preview || !!selectedLab || pathStack.length > 1}
             >
               <ChevronLeft size={18} />
               Back
@@ -361,7 +382,7 @@ export default function LabsPage() {
             {/* شبكة اللابات */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
               <AnimatePresence>
-                {labsLoading && null}
+                {labsLoading && <div className="col-span-full text-center text-slate-300 text-sm">Loading labs…</div>}
 
                 {!labsLoading && labsErr && (
                   <p className="text-center col-span-full text-rose-300 text-sm mt-4">{labsErr}</p>
@@ -417,16 +438,17 @@ export default function LabsPage() {
             {/* زر Back */}
             <div className="mb-4">
               <button
-                onClick={backOne}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition"
+                onClick={backOneUI}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Back"
+                disabled={loading}  // منع التراجع أثناء التحميل
               >
                 <ChevronLeft size={18} />
                 Back
               </button>
             </div>
 
-            {/* عنوان اللاب: الرمز - الاسم في سطر واحد وبشكل بارز */}
+            {/* عنوان اللاب */}
             <div className="mb-2">
               <h3 className="text-2xl md:text-3xl font-extrabold tracking-tight flex flex-wrap items-baseline gap-2">
                 <span className="text-orange-400">{selectedLab.code}</span>
@@ -452,7 +474,7 @@ export default function LabsPage() {
             </div>
 
             {/* حالات التحميل/الخطأ */}
-            {loading && null}
+            {loading && <div className="text-center text-slate-300 text-sm mt-4">Loading…</div>}
             {err && <p className="text-red-300 text-sm mt-6">{err}</p>}
 
             {/* العناصر */}
@@ -515,10 +537,9 @@ export default function LabsPage() {
 
           {/* الدعاء */}
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm leading-relaxed text-slate-100" dir="rtl">
-           <div className="text-orange-400 font-semibold mb-2 text-center">
-  وأنت بتدرس، لا تنسى أهلنا في غزة
-</div>
-
+            <div className="text-orange-400 font-semibold mb-2 text-center">
+              وأنت بتدرس، لا تنسى أهلنا في غزة
+            </div>
             <p className="whitespace-pre-line">
               اللهم يا رحيم، يا قوي، يا جبار، كن لأهل غزة عونًا ونصيرًا، اللهم احفظهم بحفظك، وأمنهم بأمانك، واشفِ جرحاهم،
               وتقبل شهداءهم، واربط على قلوبهم، وأبدل خوفهم أمنًا، وحزنهم فرحًا، وضعفهم قوة، اللهم عجّل لهم بالفرج والنصر المبين،
@@ -529,15 +550,15 @@ export default function LabsPage() {
           {/* Upload File */}
           <div className="flex justify-center">
             <a
-            href={FORM_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-2 px-5 py-3 rounded-xl bg-orange-400 hover:bg-orange-500 text-white text-sm transition"
-            title="Upload to Pending"
-          >
-            <Upload size={16} />
-            Upload File
-          </a>
+              href={FORM_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-2 px-5 py-3 rounded-xl bg-orange-400 hover:bg-orange-500 text-white text-sm transition"
+              title="Upload to Pending"
+            >
+              <Upload size={16} />
+              Upload File
+            </a>
           </div>
 
           <p className="text-center text-xs text-slate-300">© 2025 - ElecLib</p>
@@ -590,7 +611,6 @@ export default function LabsPage() {
                   </>
                 )}
 
-                {/* نستخدم Google Drive preview عبر iframe — يعمل للصور و PDF والفيديو */}
                 <iframe
                   title={preview.name}
                   src={`https://drive.google.com/file/d/${preview.id}/preview`}
@@ -600,7 +620,7 @@ export default function LabsPage() {
                 />
               </div>
 
-              {/* Footer: زر Download يظهر دائمًا */}
+              {/* Footer */}
               <div className="p-4 flex items-center justify-end gap-2 border-t border-white/10 shrink-0">
                 <a
                   href={getUniversalDownloadLink(preview)}
