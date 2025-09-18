@@ -101,7 +101,7 @@ export default function Hero() {
       <div className="fixed inset-0 z-[1] bg-transparent backdrop-blur-none" />
 
       <div className="relative z-10 w-full flex justify-center">
-        <div className="bg-black/30 sm:bg-gradient-to-br sm:from-neutral-800 sm:to-neutral-900 backdrop-blur-sm sm:backdrop-blur-lg text-white rounded-2xl shadow-2xl w-full max-w-[88%] sm:max-w-3xl px-4 sm:px-10 py-4 sm:py-14 space-y-5 sm:space-y-8 text-center border border-white/10">
+        <div className="bg-black/30 sm:bg-gradient-to-br sm:from-neutral-800 sm:to-neutral-900 backdrop-blur-sm sm:backdrop-blur-lg text-white rounded-2xl shadow-2xl w-full max-w-[92%] sm:max-w-3xl px-4 sm:px-10 py-4 sm:py-14 space-y-5 sm:space-y-8 text-center border border-white/10">
           <h1 className="text-4xl md:text-4xl font-extrabold leading-tight tracking-tight drop-shadow">
             <span className="text-orange-400">ElecLib</span>
             <span
