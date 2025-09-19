@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import {
   FolderOpen, File, FileText, FileCode, Image as ImageIcon,
   FileArchive, FileSpreadsheet, FileAudio2, FileVideo2, Presentation,
@@ -48,7 +48,6 @@ function getUniversalDownloadLink(file) {
   if (file.mimeType?.startsWith("application/vnd.google-apps")) {
     const exportMime = "application/pdf";
     return `https://www.googleapis.com/drive/v3/files/${file.id}/export?mimeType=${encodeURIComponent(exportMime)}&key=${API_KEY}`;
-    // ملاحظة: ممكن تبدّل PDF بأنواع أخرى حسب النوع
   }
   if (file.webContentLink) return file.webContentLink;
   return `https://drive.google.com/uc?export=download&id=${file.id}`;
@@ -93,13 +92,13 @@ function parseLabFromFolderName(name) {
   return { code: name || "LAB", name: "" };
 }
 
-/* API: إرجاع العناصر داخل مجلد */
+/* API: إرجاع العناصر داخل مجلد (خفضنا pageSize لتخفيف الحمل) */
 async function listChildren({ parentId, onlyFolders = false }) {
   const base = "https://www.googleapis.com/drive/v3/files";
   const mimeFilter = onlyFolders ? " and mimeType='application/vnd.google-apps.folder'" : "";
   const q = encodeURIComponent(`'${parentId}' in parents and trashed=false${mimeFilter}`);
   const fields = encodeURIComponent("files(id,name,mimeType,modifiedTime,webViewLink,webContentLink)");
-  const url = `${base}?q=${q}&key=${API_KEY}&fields=nextPageToken,${fields}&pageSize=1000&orderBy=folder,name&supportsAllDrives=true&includeItemsFromAllDrives=true`;
+  const url = `${base}?q=${q}&key=${API_KEY}&fields=nextPageToken,${fields}&pageSize=200&orderBy=folder,name&supportsAllDrives=true&includeItemsFromAllDrives=true`;
   const res = await fetch(url);
   if (!res.ok) {
     const text = await res.text();
@@ -111,6 +110,8 @@ async function listChildren({ parentId, onlyFolders = false }) {
 
 /* ===================== Component ===================== */
 export default function LabsPage() {
+  const prefersReducedMotion = useReducedMotion();
+
   // بحث وقائمة اللابات
   const [search, setSearch] = useState("");
   const [labs, setLabs] = useState([]);
@@ -184,7 +185,7 @@ export default function LabsPage() {
     return () => window.removeEventListener("popstate", onPop);
   }, [preview, pathStack.length, selectedLab]);
 
-  /* ==== زر الرجوع داخل الواجهة (UI Back) — لا يعتمد على history إلا كحل أخير ==== */
+  /* ==== زر الرجوع داخل الواجهة (Fail-Safe لـ iOS) ==== */
   function backOneUI() {
     if (backBusyRef.current) return;
     backBusyRef.current = true;
@@ -212,17 +213,34 @@ export default function LabsPage() {
       return;
     }
 
-    // 4) أنت أصلاً على صفحة جميع المواد: لا شيء ترجع له محليًا
-    // جرّب window.history.back مرة واحدة فقط، ثم فك القفل.
+    // 4) على الصفحة الرئيسية: إذا ما في تاريخ نرجع له، فكّ القفل
+    if (window.history.length <= 1) {
+      backBusyRef.current = false;
+      return;
+    }
+
+    // خطة طوارئ لـ iOS
+    const emergencyUnlock = () => { backBusyRef.current = false; };
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") emergencyUnlock();
+    };
+    window.addEventListener("pagehide", emergencyUnlock, { once: true });
+    document.addEventListener("visibilitychange", onVisibility, { once: true });
+
     const onPopOnce = () => {
+      document.removeEventListener("visibilitychange", onVisibility);
       backBusyRef.current = false;
     };
     window.addEventListener("popstate", onPopOnce, { once: true });
+
     window.history.back();
+
+    // فكّ القفل إن ما صار popstate بسرعة (iOS/بطء)
     setTimeout(() => {
       window.removeEventListener("popstate", onPopOnce);
-      backBusyRef.current = false;
-    }, 250);
+      document.removeEventListener("visibilitychange", onVisibility);
+      if (backBusyRef.current) backBusyRef.current = false;
+    }, 200);
   }
 
   /* ===== اختيار لاب ===== */
@@ -264,7 +282,6 @@ export default function LabsPage() {
 
   function goToLevel(index) {
     setPathStack((prev) => prev.slice(0, index + 1));
-    // إبقاء pushState كما هو (يمكن تحويله إلى replaceState لو حبيت تقليل خطوات الرجوع)
     window.history.pushState({ type: "breadcrumb", depth: index }, "");
   }
 
@@ -293,7 +310,7 @@ export default function LabsPage() {
     bumpFeedbackCounterAndTrigger();
   }
 
-  // إغلاق المعاينة محليًا (بدون history.back لتفادي “التعليق”)
+  // إغلاق المعاينة محليًا
   function closePreviewAll() {
     setPreview(null);
     previewPushedRef.current = false;
@@ -322,21 +339,22 @@ export default function LabsPage() {
   /* ===================== UI ===================== */
   return (
     <div className="relative min-h-screen flex items-center justify-center px-4">
-      {/* خلفية فيديو مثل الهيرو */}
+      {/* خلفية فيديو — تبقى متحركة */}
       <video
         autoPlay
         muted
         loop
         playsInline
         preload="auto"
-        className="fixed inset-0 z-0 w-full h-full object-cover"
+        poster={process.env.PUBLIC_URL + "/videos/elec-bg-poster.jpg"}
+        className="fixed inset-0 z-0 w-full h-full object-cover will-change-transform"
         aria-hidden="true"
       >
         <source src={process.env.PUBLIC_URL + "/videos/elec-bg.mp4"} type="video/mp4" />
       </video>
 
-      {/* طبقة فوق الفيديو (خفيفة) */}
-      <div className="fixed inset-0 z-[1] bg-transparent backdrop-blur-none" />
+      {/* طبقة فوق الفيديو (بدون backdrop-blur لتخفيف الحمل على iOS) */}
+      <div className="fixed inset-0 z-[1] bg-black/30" />
 
       <main className="relative z-10 w-full max-w-6xl text-white py-10">
         <h2
@@ -351,7 +369,7 @@ export default function LabsPage() {
           Electrical Engineering Labs
         </h2>
 
-        {/* زر رجوع على الصفحة الرئيسية للّابات (قد لا يكون له رجعة محلية) */}
+        {/* زر رجوع على الصفحة الرئيسية للّابات */}
         {!selectedLab && (
           <div className="mb-4 flex justify-start">
             <button
@@ -382,48 +400,83 @@ export default function LabsPage() {
 
             {/* شبكة اللابات */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-              <AnimatePresence>
-                {labsLoading && <div className="col-span-full text-center text-slate-300 text-sm">Loading labs…</div>}
-
-                {!labsLoading && labsErr && (
-                  <p className="text-center col-span-full text-rose-300 text-sm mt-4">{labsErr}</p>
-                )}
-
-                {!labsLoading && !labsErr && labsList.map((lab) => {
-                  const q = search.trim();
-                  return (
-                    <motion.button
-                      key={lab.id}
-                      onClick={() => handleSelectLab(lab)}
-                      className="group text-left block w-full"
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -8 }}
-                      transition={{ duration: 0.2 }}
-                    >
-                      <div className="bg-gradient-to-br from-neutral-800 to-neutral-900 text-white rounded-2xl p-5 shadow-lg border border-white/10 backdrop-blur-md transition-transform duration-200 group-hover:scale-[1.03] hover:border-orange-500 flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-orange-500/20 text-orange-300 grid place-items-center shadow-inner">
-                          <Zap size={18} />
+              {!prefersReducedMotion ? (
+                <AnimatePresence>
+                  {labsLoading && <div className="col-span-full text-center text-slate-300 text-sm">Loading labs…</div>}
+                  {!labsLoading && labsErr && (
+                    <p className="text-center col-span-full text-rose-300 text-sm mt-4">{labsErr}</p>
+                  )}
+                  {!labsLoading && !labsErr && labsList.map((lab) => {
+                    const q = search.trim();
+                    return (
+                      <motion.button
+                        key={lab.id}
+                        onClick={() => handleSelectLab(lab)}
+                        className="group text-left block w-full will-change-transform"
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -8 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <div className="bg-gradient-to-br from-neutral-800 to-neutral-900 text-white rounded-2xl p-5 shadow-lg border border-white/10 transition-transform duration-200 group-hover:scale-[1.03] hover:border-orange-500 flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-orange-500/20 text-orange-300 grid place-items-center">
+                            <Zap size={18} />
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="font-bold text-orange-300 text-base mb-0.5">
+                              {highlightMatch(lab.code, q)}
+                            </h4>
+                            {lab.name && (
+                              <p className="text-slate-200 text-sm truncate">
+                                {highlightMatch(lab.name, q)}
+                              </p>
+                            )}
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <h4 className="font-bold text-orange-300 text-base mb-0.5">
-                            {highlightMatch(lab.code, q)}
-                          </h4>
-                          {lab.name && (
-                            <p className="text-slate-200 text-sm truncate">
-                              {highlightMatch(lab.name, q)}
-                            </p>
-                          )}
+                      </motion.button>
+                    );
+                  })}
+                  {!labsLoading && !labsErr && labsList.length === 0 && (
+                    <p className="text-center col-span-full text-slate-400 text-sm mt-4">No labs found.</p>
+                  )}
+                </AnimatePresence>
+              ) : (
+                <>
+                  {labsLoading && <div className="col-span-full text-center text-slate-300 text-sm">Loading labs…</div>}
+                  {!labsLoading && labsErr && (
+                    <p className="text-center col-span-full text-rose-300 text-sm mt-4">{labsErr}</p>
+                  )}
+                  {!labsLoading && !labsErr && labsList.map((lab) => {
+                    const q = search.trim();
+                    return (
+                      <button
+                        key={lab.id}
+                        onClick={() => handleSelectLab(lab)}
+                        className="group text-left block w-full"
+                      >
+                        <div className="bg-gradient-to-br from-neutral-800 to-neutral-900 text-white rounded-2xl p-5 shadow-lg border border-white/10 transition hover:border-orange-500 flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-orange-500/20 text-orange-300 grid place-items-center">
+                            <Zap size={18} />
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="font-bold text-orange-300 text-base mb-0.5">
+                              {highlightMatch(lab.code, q)}
+                            </h4>
+                            {lab.name && (
+                              <p className="text-slate-200 text-sm truncate">
+                                {highlightMatch(lab.name, q)}
+                              </p>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </motion.button>
-                  );
-                })}
-
-                {!labsLoading && !labsErr && labsList.length === 0 && (
-                  <p className="text-center col-span-full text-slate-400 text-sm mt-4">No labs found.</p>
-                )}
-              </AnimatePresence>
+                      </button>
+                    );
+                  })}
+                  {!labsLoading && !labsErr && labsList.length === 0 && (
+                    <p className="text-center col-span-full text-slate-400 text-sm mt-4">No labs found.</p>
+                  )}
+                </>
+              )}
             </div>
           </>
         )}
@@ -432,8 +485,8 @@ export default function LabsPage() {
         {selectedLab && (
           <motion.div
             className="bg-white/5 rounded-2xl p-4 md:p-6 border border-white/10 shadow-xl mt-4"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
+            animate={prefersReducedMotion ? false : { opacity: 1, y: 0 }}
             transition={{ duration: 0.25 }}
           >
             {/* زر Back */}
@@ -442,7 +495,7 @@ export default function LabsPage() {
                 onClick={backOneUI}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Back"
-                disabled={loading}  // منع التراجع أثناء التحميل
+                disabled={loading}
               >
                 <ChevronLeft size={18} />
                 Back
@@ -481,39 +534,72 @@ export default function LabsPage() {
             {/* العناصر */}
             {!loading && !err && (
               <ul className="mt-5 space-y-3">
-                <AnimatePresence>
-                  {items.map((f) => {
-                    const { Icon, tone } = pickIcon({ mime: f.mimeType, isFolderFlag: isFolder(f.mimeType), name: f.name });
-                    const isDir = isFolder(f.mimeType);
-                    const onClick = () => {
-                      if (isDir) openFolder(f);
-                      else { openPreview(f); }
-                    };
-                    return (
-                      <motion.li
-                        key={f.id}
-                        onClick={onClick}
-                        className="rounded-2xl bg-gradient-to-br from-neutral-900 to-neutral-950 border border-white/10 p-4 transition hover:border-orange-500 cursor-pointer"
-                        initial={{ opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -6 }}
-                      >
-                        <div className="flex gap-4">
-                          <div className={`w-12 h-12 rounded-2xl grid place-items-center ${tone} shadow-inner shrink-0`}>
-                            <Icon size={22} />
+                {(!prefersReducedMotion ? (
+                  <AnimatePresence>
+                    {items.map((f) => {
+                      const { Icon, tone } = pickIcon({ mime: f.mimeType, isFolderFlag: isFolder(f.mimeType), name: f.name });
+                      const isDir = isFolder(f.mimeType);
+                      const onClick = () => {
+                        if (isDir) openFolder(f);
+                        else { openPreview(f); }
+                      };
+                      return (
+                        <motion.li
+                          key={f.id}
+                          onClick={onClick}
+                          className="rounded-2xl bg-gradient-to-br from-neutral-900 to-neutral-950 border border-white/10 p-4 transition hover:border-orange-500 cursor-pointer will-change-transform"
+                          initial={{ opacity: 0, y: 6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -6 }}
+                        >
+                          <div className="flex gap-4">
+                            <div className={`w-12 h-12 rounded-2xl grid place-items-center ${tone} shrink-0`}>
+                              <Icon size={22} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-white text-sm md:text-base font-medium break-words whitespace-normal sm:truncate">
+                                {f.name}
+                              </h4>
+                              <div className="text-xs text-slate-400 mt-1">{fileTypeLabel(f)}</div>
+                            </div>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <h4 className="text-white text-sm md:text-base font-medium break-words whitespace-normal sm:truncate">
-                              {f.name}
-                            </h4>
-                            <div className="text-xs text-slate-400 mt-1">{fileTypeLabel(f)}</div>
+                        </motion.li>
+                      );
+                    })}
+                    {items.length === 0 && <li className="text-slate-400 text-sm">No items here.</li>}
+                  </AnimatePresence>
+                ) : (
+                  <>
+                    {items.map((f) => {
+                      const { Icon, tone } = pickIcon({ mime: f.mimeType, isFolderFlag: isFolder(f.mimeType), name: f.name });
+                      const isDir = isFolder(f.mimeType);
+                      const onClick = () => {
+                        if (isDir) openFolder(f);
+                        else { openPreview(f); }
+                      };
+                      return (
+                        <li
+                          key={f.id}
+                          onClick={onClick}
+                          className="rounded-2xl bg-gradient-to-br from-neutral-900 to-neutral-950 border border-white/10 p-4 transition hover:border-orange-500 cursor-pointer"
+                        >
+                          <div className="flex gap-4">
+                            <div className={`w-12 h-12 rounded-2xl grid place-items-center ${tone} shrink-0`}>
+                              <Icon size={22} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-white text-sm md:text-base font-medium break-words whitespace-normal sm:truncate">
+                                {f.name}
+                              </h4>
+                              <div className="text-xs text-slate-400 mt-1">{fileTypeLabel(f)}</div>
+                            </div>
                           </div>
-                        </div>
-                      </motion.li>
-                    );
-                  })}
-                  {items.length === 0 && <li className="text-slate-400 text-sm">No items here.</li>}
-                </AnimatePresence>
+                        </li>
+                      );
+                    })}
+                    {items.length === 0 && <li className="text-slate-400 text-sm">No items here.</li>}
+                  </>
+                ))}
               </ul>
             )}
           </motion.div>
@@ -570,14 +656,16 @@ export default function LabsPage() {
       <AnimatePresence>
         {preview && (
           <motion.div
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 grid place-items-center px-4"
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 z-50 grid place-items-center px-4"
+            initial={prefersReducedMotion ? false : { opacity: 0 }}
+            animate={prefersReducedMotion ? false : { opacity: 1 }}
+            exit={prefersReducedMotion ? false : { opacity: 0 }}
           >
             <motion.div
-              className="relative bg-neutral-900 border border-white/10 rounded-2xl w-full max-w-[95vw] md:max-w-[90vw] max-h-[92vh] overflow-hidden shadow-2xl flex flex-col"
-              initial={{ scale: 0.96, y: 12, opacity: 0 }}
-              animate={{ scale: 1, y: 0, opacity: 1 }}
-              exit={{ scale: 0.96, y: 12, opacity: 0 }}
+              className="relative bg-neutral-900 border border-white/10 rounded-2xl w-full max-w-[95vw] md:max-w-[90vw] max-h-[92vh] overflow-hidden shadow-xl flex flex-col"
+              initial={prefersReducedMotion ? false : { scale: 0.96, y: 12, opacity: 0 }}
+              animate={prefersReducedMotion ? false : { scale: 1, y: 0, opacity: 1 }}
+              exit={prefersReducedMotion ? false : { scale: 0.96, y: 12, opacity: 0 }}
             >
               {/* Header */}
               <div className="flex items-center justify-between p-4 border-b border-white/10 shrink-0">
@@ -618,6 +706,7 @@ export default function LabsPage() {
                   className="w-full h-[60vh] md:h-[60vh] rounded-lg border-0"
                   allow="autoplay"
                   allowFullScreen
+                  loading="lazy"
                 />
               </div>
 
