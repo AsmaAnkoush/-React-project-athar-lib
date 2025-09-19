@@ -213,11 +213,12 @@ export default function LabsPage() {
     }
 
     // 4) أنت أصلاً على صفحة جميع المواد: لا شيء ترجع له محليًا
-    // جرّب history.back مرة واحدة فقط، ثم فك القفل.
-    let popped = false;
-    const onPopOnce = () => { popped = true; };
+    // جرّب window.history.back مرة واحدة فقط، ثم فك القفل.
+    const onPopOnce = () => {
+      backBusyRef.current = false;
+    };
     window.addEventListener("popstate", onPopOnce, { once: true });
-window.history.back();
+    window.history.back();
     setTimeout(() => {
       window.removeEventListener("popstate", onPopOnce);
       backBusyRef.current = false;
