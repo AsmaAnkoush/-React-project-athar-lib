@@ -217,7 +217,7 @@ export default function LabsPage() {
     let popped = false;
     const onPopOnce = () => { popped = true; };
     window.addEventListener("popstate", onPopOnce, { once: true });
-    history.back();
+window.history.back();
     setTimeout(() => {
       window.removeEventListener("popstate", onPopOnce);
       backBusyRef.current = false;

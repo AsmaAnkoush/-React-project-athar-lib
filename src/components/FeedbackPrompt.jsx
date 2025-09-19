@@ -29,7 +29,7 @@ export default function FeedbackPrompt() {
   const verdict = useMemo(() => {
     switch (stars) {
       case 1:
-        return { img: "/feedback/66.png", msg: "يا ساتر! 😱 نجمة وحدة؟ طمنا شو اللي صار؟" };
+        return { img: "/feedback/66.png", msg: "يا ساتر!  نجمة وحدة؟ طمنا شو اللي صار؟" };
       case 2:
         return { img: "/feedback/33.png", msg: "يعني مو أسوأ شي 🤏 بس كيف نخليها 5 نجوم؟" };
       case 3:
