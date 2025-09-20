@@ -295,21 +295,10 @@ export default function LabsPage() {
 
   function openPreview(f) {
     scrollYRef.current = window.scrollY || 0;
-    // Mobile/tablet: افتح غير الصور بتبويب خارجي، ويفضّل PDF مباشر بدل صفحة Drive
+    // على الموبايل: افتح كل الأنواع (غير الصور) في صفحة معاينة Drive بدون تنزيل
     if (isMobile && !isImageFile(f)) {
-      const isGDoc = f.mimeType?.startsWith('application/vnd.google-apps');
-      const isPDF  = f.mimeType === 'application/pdf' || /\.pdf$/i.test(f.name);
-      if (isGDoc) {
-        const pdfUrl = `https://www.googleapis.com/drive/v3/files/${f.id}/export?mimeType=application/pdf&key=${API_KEY}`;
-        window.open(pdfUrl, '_blank');
-        return;
-      }
-      if (isPDF) {
-        const directPdf = `https://drive.google.com/uc?export=download&id=${f.id}`;
-        window.open(directPdf, '_blank');
-        return;
-      }
-      window.open(`https://drive.google.com/file/d/${f.id}/preview`, '_blank');
+      const url = `https://drive.google.com/file/d/${f.id}/preview`;
+      window.open(url, '_blank');
       return;
     }
     setPreview(f);
