@@ -9,12 +9,13 @@ import {
 /* =========================================================
    Smooth + Video-on (mobile & desktop):
    - Video background ALWAYS on (incl. iOS)
-   - Mobile/tablet: fewer animations, open non-images in new tab (no iframe-jank)
-   - Desktop/laptop: preview modal for all types as before
+   - Mobile/tablet: fewer animations
+   - Mobile: non‑images open in SAME TAB (no blank "Untitled"), images in modal
+   - Desktop: preview modal for all types (as before)
    - Lists: paging to keep DOM small (no external virtualization needed)
    - Drive requests: pageSize=100 + AbortController
-   - Preview images via <img> with async decoding
-   - Back button on root: history.back() with safe unlock (no hang)
+   - Images via Drive alt=media with preview iframe fallback
+   - Root Back button: history.back() with safe unlock (no hang)
    ========================================================= */
 
 /* ===================== Feedback trigger helper ===================== */
@@ -52,7 +53,7 @@ function fileTypeLabel(f) {
   return ext.toUpperCase();
 }
 
-/** رابط تنزيل موحّد يعمل لكل الأنواع (صور/ملفات مباشرة/مستندات Google) */
+/** روابط عرض/تنزيل موحّدة */
 function getUniversalDownloadLink(file) {
   if (!file) return null;
   if (file.mimeType?.startsWith("application/vnd.google-apps")) {
@@ -61,6 +62,11 @@ function getUniversalDownloadLink(file) {
   }
   if (file.webContentLink) return file.webContentLink;
   return `https://drive.google.com/uc?export=download&id=${file.id}`;
+}
+
+function getImageMediaUrl(file) {
+  // عرض الصور مباشرة عبر Drive alt=media (يتطلب الملف عام Anyone with the link)
+  return `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media&key=${API_KEY}`;
 }
 
 function pickIcon({ mime, isFolderFlag, name = "" }) {
@@ -96,7 +102,7 @@ function highlightMatch(text, query) {
 
 // تقسيم اسم مجلد اللاب إلى code و name
 function parseLabFromFolderName(name) {
-  const rx = /^\s*([A-Za-z]{3,}\d{3,})\s*[-_/:\s]+\s*(.+)\s*$/;
+  const rx = /^\s*([A-Za-z]{3,}\d{3,})\s*[-/_:\s]+\s*(.+)\s*$/;
   const m = name?.match(rx);
   if (m) return { code: m[1].toUpperCase(), name: m[2] };
   return { code: name || "LAB", name: "" };
@@ -150,12 +156,16 @@ export default function LabsPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [preview, setPreview] = useState(null);
+  const [imgError, setImgError] = useState(false);
 
   // History/scroll
   const scrollYRef = useRef(0);
 
   // قفل النقرات السريعة على زر الرجوع في الواجهة
   const backBusyRef = useRef(false);
+
+  // منع الفتح المزدوج على الموبايل (double‑tap)
+  const tapGuardRef = useRef(0);
 
   /* ===== تحميل مجلدات اللابات من مجلد الجذر ===== */
   useEffect(() => {
@@ -192,6 +202,7 @@ export default function LabsPage() {
     setItems([]);
     setErr("");
     setPreview(null);
+    setImgError(false);
   }
 
   /* ==== زر الرجوع داخل الواجهة ==== */
@@ -295,20 +306,37 @@ export default function LabsPage() {
 
   function openPreview(f) {
     scrollYRef.current = window.scrollY || 0;
-    // على الموبايل: افتح كل الأنواع (غير الصور) في صفحة معاينة Drive بدون تنزيل
+
+    // حارس لمسات سريعة حتى ما يفتح أكثر من تبويب على iOS
+    const now = Date.now();
+    if (now - (tapGuardRef.current || 0) < 700) return; // تجاهل النقرات خلال 700ms
+    tapGuardRef.current = now;
+
+    // على الموبايل: افتح ملفات غير الصور في نفس التبويب لتفادي تبويب "Untitled"
     if (isMobile && !isImageFile(f)) {
       const url = `https://drive.google.com/file/d/${f.id}/preview`;
-      window.open(url, '_blank');
+      try {
+        window.location.assign(url);
+      } catch {
+        window.location.href = url; // fallback
+      }
       return;
     }
+
+    // على الديسكتوب (أو الصور على الموبايل): اعرض المودال
+    setImgError(false);
     setPreview(f);
     bumpFeedbackCounterAndTrigger();
   }
 
   function closePreviewAll() {
     setPreview(null);
+    setImgError(false);
     requestAnimationFrame(() => window.scrollTo(0, scrollYRef.current || 0));
   }
+
+  // Reset image error when switching image
+  useEffect(() => { setImgError(false); }, [preview?.id]);
 
   // كيبورد: Esc يغلق المعاينة + أسهم للتنقّل بين الصور
   useEffect(() => {
@@ -654,7 +682,7 @@ export default function LabsPage() {
 
               {/* Content */}
               <div className="relative bg-neutral-950 p-3 grow overflow-auto">
-                {isImageFile(preview) && navigableImages.length > 1 && (
+                {isImageFile(preview) && navigableImages.length > 1 && !imgError && (
                   <>
                     <button
                       onClick={() => navAny("prev")}
@@ -673,19 +701,20 @@ export default function LabsPage() {
                   </>
                 )}
 
-                {isImageFile(preview) ? (
+                {isImageFile(preview) && !imgError ? (
                   <img
-                    src={`https://drive.google.com/uc?export=view&id=${preview.id}`}
+                    src={getImageMediaUrl(preview)}
                     alt={preview.name}
                     className="w-full h-[60vh] md:h-[60vh] object-contain rounded-lg"
                     loading="lazy"
                     decoding="async"
                     fetchpriority="low"
                     referrerPolicy="no-referrer"
+                    onError={() => setImgError(true)}
                   />
                 ) : (
                   <iframe
-                    title={preview.name}
+                    title={preview?.name || 'Preview'}
                     src={`https://drive.google.com/file/d/${preview.id}/preview`}
                     className="w-full h-[60vh] md:h-[60vh] rounded-lg border-0"
                     allow="autoplay"
