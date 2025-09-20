@@ -14,6 +14,7 @@ import {
    - Lists: paging to keep DOM small (no external virtualization needed)
    - Drive requests: pageSize=100 + AbortController
    - Preview images via <img> with async decoding
+   - Back button on root: history.back() with safe unlock (no hang)
    ========================================================= */
 
 /* ===================== Feedback trigger helper ===================== */
@@ -198,6 +199,7 @@ export default function LabsPage() {
     if (backBusyRef.current) return;
     backBusyRef.current = true;
 
+    // 1) إغلاق المعاينة إن كانت مفتوحة
     if (preview) {
       setPreview(null);
       requestAnimationFrame(() => window.scrollTo(0, scrollYRef.current || 0));
@@ -205,19 +207,32 @@ export default function LabsPage() {
       return;
     }
 
+    // 2) التراجع مستوى داخل المجلدات
     if (pathStack.length > 1) {
       setPathStack((p) => p.slice(0, -1));
       backBusyRef.current = false;
       return;
     }
 
+    // 3) الرجوع من داخل مادة إلى صفحة جميع المواد
     if (selectedLab) {
       resetAll();
       backBusyRef.current = false;
       return;
     }
 
-    backBusyRef.current = false;
+    // 4) على الصفحة الرئيسية: ارجع للي قبلها في المتصفح مباشرة وبأمان
+    const onPopOnce = () => {
+      window.removeEventListener('popstate', onPopOnce);
+      backBusyRef.current = false;
+    };
+    window.addEventListener('popstate', onPopOnce, { once: true });
+    window.history.back();
+    // فكّ القفل لو ما وصلنا popstate (بعض بيئات iOS)
+    setTimeout(() => {
+      window.removeEventListener('popstate', onPopOnce);
+      if (backBusyRef.current) backBusyRef.current = false;
+    }, 400);
   }
 
   /* ===== اختيار لاب ===== */
@@ -280,10 +295,21 @@ export default function LabsPage() {
 
   function openPreview(f) {
     scrollYRef.current = window.scrollY || 0;
-    // Mobile/tablet: افتح غير الصور بتبويب خارجي لتجنّب iframe-jank داخل overlay
+    // Mobile/tablet: افتح غير الصور بتبويب خارجي، ويفضّل PDF مباشر بدل صفحة Drive
     if (isMobile && !isImageFile(f)) {
-      const url = `https://drive.google.com/file/d/${f.id}/preview`;
-      window.open(url, "_blank");
+      const isGDoc = f.mimeType?.startsWith('application/vnd.google-apps');
+      const isPDF  = f.mimeType === 'application/pdf' || /\.pdf$/i.test(f.name);
+      if (isGDoc) {
+        const pdfUrl = `https://www.googleapis.com/drive/v3/files/${f.id}/export?mimeType=application/pdf&key=${API_KEY}`;
+        window.open(pdfUrl, '_blank');
+        return;
+      }
+      if (isPDF) {
+        const directPdf = `https://drive.google.com/uc?export=download&id=${f.id}`;
+        window.open(directPdf, '_blank');
+        return;
+      }
+      window.open(`https://drive.google.com/file/d/${f.id}/preview`, '_blank');
       return;
     }
     setPreview(f);
