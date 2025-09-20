@@ -1,5 +1,4 @@
-// LabsPage (video-on, iOS-safe)
-import React, { useEffect, useMemo, useState, useCallback, useRef, Suspense } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import {
   FolderOpen, File, FileText, FileCode, Image as ImageIcon,
@@ -8,10 +7,11 @@ import {
 } from "lucide-react";
 
 /* =========================================================
-   ✅ Smooth + Video-on-iOS:
-   - Video background ALWAYS on (desktop + mobile + iOS)
-   - iOS-safe: fewer animations, open non-images in new tab (no iframe-jank)
-   - Lists: motion disabled when long, DOM kept small (paging/virtuoso)
+   Smooth + Video-on (mobile & desktop):
+   - Video background ALWAYS on (incl. iOS)
+   - Mobile/tablet: fewer animations, open non-images in new tab (no iframe-jank)
+   - Desktop/laptop: preview modal for all types as before
+   - Lists: paging to keep DOM small (no external virtualization needed)
    - Drive requests: pageSize=100 + AbortController
    - Preview images via <img> with async decoding
    ========================================================= */
@@ -19,7 +19,6 @@ import {
 /* ===================== Feedback trigger helper ===================== */
 const LS_TRIGGER_KEY = "eleclib_feedback_trigger";
 const LS_COUNT_KEY   = "eleclib_feedback_open_count";
-
 function bumpFeedbackCounterAndTrigger() {
   try {
     if (localStorage.getItem(LS_TRIGGER_KEY) === "1") return;
@@ -103,7 +102,7 @@ function parseLabFromFolderName(name) {
 }
 
 // Debounce hook
-function useDebouncedValue(value, delay = 200) {
+function useDebouncedValue(value, delay = 220) {
   const [v, setV] = useState(value);
   useEffect(() => {
     const id = setTimeout(() => setV(value), delay);
@@ -112,19 +111,13 @@ function useDebouncedValue(value, delay = 200) {
   return v;
 }
 
-// Optional virtualization (dynamic). If react-virtuoso isn't installed, we'll fallback to paging.
-const VirtuosoLazy = React.lazy(() =>
-  import("react-virtuoso").then(m => ({ default: m.Virtuoso })).catch(() => ({ default: null }))
-);
-
 /* API: إرجاع العناصر داخل مجلد */
 async function listChildren({ parentId, onlyFolders = false, signal }) {
   const base = "https://www.googleapis.com/drive/v3/files";
   const mimeFilter = onlyFolders ? " and mimeType='application/vnd.google-apps.folder'" : "";
   const q = encodeURIComponent(`'${parentId}' in parents and trashed=false${mimeFilter}`);
   const fields = encodeURIComponent("files(id,name,mimeType,modifiedTime,webViewLink,webContentLink)");
-  // smaller pageSize for smoother UI; consider paging if many files
-  const url = `${base}?q=${q}&key=${API_KEY}&fields=nextPageToken,${fields}&pageSize=100&orderBy=folder,name&supportsAllDrives=true&includeItemsFromAllDrives=true`;
+  const url = `${base}?q=${q}&key=${API_KEY}&fields=nextPageToken,${fields}&pageSize=100&supportsAllDrives=true&includeItemsFromAllDrives=true`;
   const res = await fetch(url, { signal });
   if (!res.ok) {
     const text = await res.text();
@@ -137,8 +130,8 @@ async function listChildren({ parentId, onlyFolders = false, signal }) {
 /* ===================== Component ===================== */
 export default function LabsPage() {
   const prefersReducedMotion = useReducedMotion();
-  const isiOS = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/i.test(navigator.userAgent);
-  const motionOK = !isiOS && !prefersReducedMotion;
+  const isMobile = typeof window !== 'undefined' && window.matchMedia?.('(pointer:coarse)').matches;
+  const motionOK = !isMobile && !prefersReducedMotion;
 
   // بحث وقائمة اللابات
   const [search, setSearch] = useState("");
@@ -287,8 +280,8 @@ export default function LabsPage() {
 
   function openPreview(f) {
     scrollYRef.current = window.scrollY || 0;
-    // iOS: افتح غير الصور بتبويب خارجي لتجنّب iframe-jank داخل overlay
-    if (isiOS && !isImageFile(f)) {
+    // Mobile/tablet: افتح غير الصور بتبويب خارجي لتجنّب iframe-jank داخل overlay
+    if (isMobile && !isImageFile(f)) {
       const url = `https://drive.google.com/file/d/${f.id}/preview`;
       window.open(url, "_blank");
       return;
@@ -321,8 +314,8 @@ export default function LabsPage() {
     return labs.filter((l) => l.code.toLowerCase().includes(q) || l.name.toLowerCase().includes(q));
   }, [debouncedSearch, labs]);
 
-  // threshold to disable heavy motion (stricter on iOS)
-  const MANY = isiOS ? 40 : 60;
+  // threshold to disable heavy motion (stricter on mobile)
+  const MANY = isMobile ? 40 : 60;
   const lotsOfLabs = labsList.length > MANY;
   const lotsOfItems = items.length > MANY;
 
@@ -339,9 +332,9 @@ export default function LabsPage() {
     </div>
   );
 
-  // Fallback paging for huge folders when virtuoso isn't available
+  // Fallback paging to keep DOM small
   const [page, setPage] = useState(1);
-  const PAGE_SIZE = 80; // render-limited to keep DOM small
+  const PAGE_SIZE = 80;
   const pagedItems = useMemo(() => items.slice(0, page * PAGE_SIZE), [items, page]);
   useEffect(() => { setPage(1); }, [items]);
 
@@ -504,16 +497,51 @@ export default function LabsPage() {
             {/* العناصر */}
             {!loading && !err && (
               <div className="mt-5">
-                {/* Try virtualization if available and list is big */}
-                {items.length > 200 ? (
-                  <Suspense fallback={
-                    <ul className="space-y-3">
+                <ul className="space-y-3">
+                  {motionOK && !lotsOfItems ? (
+                    <AnimatePresence>
+                      {items.map((f) => {
+                        const { Icon, tone } = pickIcon({ mime: f.mimeType, isFolderFlag: isFolder(f.mimeType), name: f.name });
+                        const isDir = isFolder(f.mimeType);
+                        const onClick = () => { isDir ? openFolder(f) : openPreview(f); };
+                        return (
+                          <motion.li
+                            key={f.id}
+                            onClick={onClick}
+                            style={{ contain: 'content' }}
+                            className="rounded-2xl bg-neutral-900 border border-white/10 p-4 hover:border-orange-500 cursor-pointer"
+                            initial={{ opacity: 0, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -6 }}
+                            transition={{ duration: 0.16 }}
+                          >
+                            <div className="flex gap-4">
+                              <div className={`w-12 h-12 rounded-2xl grid place-items-center ${tone} shrink-0`}>
+                                <Icon size={22} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h4 className="text-white text-sm md:text-base font-medium break-words whitespace-normal sm:truncate">{f.name}</h4>
+                                <div className="text-xs text-slate-400 mt-1">{fileTypeLabel(f)}</div>
+                              </div>
+                            </div>
+                          </motion.li>
+                        );
+                      })}
+                      {items.length === 0 && <li className="text-slate-400 text-sm">No items here.</li>}
+                    </AnimatePresence>
+                  ) : (
+                    <>
                       {pagedItems.map((f) => {
                         const { Icon, tone } = pickIcon({ mime: f.mimeType, isFolderFlag: isFolder(f.mimeType), name: f.name });
                         const isDir = isFolder(f.mimeType);
                         const onClick = () => { isDir ? openFolder(f) : openPreview(f); };
                         return (
-                          <li key={f.id} onClick={onClick} style={{ contain: 'content' }} className="rounded-2xl bg-neutral-900 border border-white/10 p-4 hover:border-orange-500 cursor-pointer">
+                          <li
+                            key={f.id}
+                            onClick={onClick}
+                            style={{ contain: 'content' }}
+                            className="rounded-2xl bg-neutral-900 border border-white/10 p-4 hover:border-orange-500 cursor-pointer"
+                          >
                             <div className="flex gap-4">
                               <div className={`w-12 h-12 rounded-2xl grid place-items-center ${tone} shrink-0`}>
                                 <Icon size={22} />
@@ -531,101 +559,10 @@ export default function LabsPage() {
                           <button onClick={() => setPage(p => p + 1)} className="px-4 py-2 text-sm rounded-xl bg-white/10 hover:bg-white/20">Load more</button>
                         </li>
                       )}
-                    </ul>
-                  }>
-                    <VirtuosoLazy
-                      style={{ height: Math.min(600, window.innerHeight * 0.7) }}
-                      totalCount={items.length}
-                      itemContent={(index) => {
-                        const f = items[index];
-                        const { Icon, tone } = pickIcon({ mime: f.mimeType, isFolderFlag: isFolder(f.mimeType), name: f.name });
-                        const isDir = isFolder(f.mimeType);
-                        const onClick = () => { isDir ? openFolder(f) : openPreview(f); };
-                        return (
-                          <div onClick={onClick} style={{ contain: 'content' }} className="rounded-2xl bg-neutral-900 border border-white/10 p-4 hover:border-orange-500 cursor-pointer mx-1 my-1">
-                            <div className="flex gap-4">
-                              <div className={`w-12 h-12 rounded-2xl grid place-items-center ${tone} shrink-0`}>
-                                <Icon size={22} />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <h4 className="text-white text-sm md:text-base font-medium break-words whitespace-normal sm:truncate">{f.name}</h4>
-                                <div className="text-xs text-slate-400 mt-1">{fileTypeLabel(f)}</div>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      }}
-                    />
-                  </Suspense>
-                ) : (
-                  // no need for virtualization; still keep DOM limited and animation light
-                  <ul className="space-y-3">
-                    {motionOK && !lotsOfItems ? (
-                      <AnimatePresence>
-                        {items.map((f) => {
-                          const { Icon, tone } = pickIcon({ mime: f.mimeType, isFolderFlag: isFolder(f.mimeType), name: f.name });
-                          const isDir = isFolder(f.mimeType);
-                          const onClick = () => { isDir ? openFolder(f) : openPreview(f); };
-                          return (
-                            <motion.li
-                              key={f.id}
-                              onClick={onClick}
-                              style={{ contain: 'content' }}
-                              className="rounded-2xl bg-neutral-900 border border-white/10 p-4 hover:border-orange-500 cursor-pointer"
-                              initial={{ opacity: 0, y: 6 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: -6 }}
-                              transition={{ duration: 0.16 }}
-                            >
-                              <div className="flex gap-4">
-                                <div className={`w-12 h-12 rounded-2xl grid place-items-center ${tone} shrink-0`}>
-                                  <Icon size={22} />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <h4 className="text-white text-sm md:text-base font-medium break-words whitespace-normal sm:truncate">{f.name}</h4>
-                                  <div className="text-xs text-slate-400 mt-1">{fileTypeLabel(f)}</div>
-                                </div>
-                              </div>
-                            </motion.li>
-                          );
-                        })}
-                        {items.length === 0 && <li className="text-slate-400 text-sm">No items here.</li>}
-                      </AnimatePresence>
-                    ) : (
-                      <>
-                        {pagedItems.map((f) => {
-                          const { Icon, tone } = pickIcon({ mime: f.mimeType, isFolderFlag: isFolder(f.mimeType), name: f.name });
-                          const isDir = isFolder(f.mimeType);
-                          const onClick = () => { isDir ? openFolder(f) : openPreview(f); };
-                          return (
-                            <li
-                              key={f.id}
-                              onClick={onClick}
-                              style={{ contain: 'content' }}
-                              className="rounded-2xl bg-neutral-900 border border-white/10 p-4 hover:border-orange-500 cursor-pointer"
-                            >
-                              <div className="flex gap-4">
-                                <div className={`w-12 h-12 rounded-2xl grid place-items-center ${tone} shrink-0`}>
-                                  <Icon size={22} />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <h4 className="text-white text-sm md:text-base font-medium break-words whitespace-normal sm:truncate">{f.name}</h4>
-                                  <div className="text-xs text-slate-400 mt-1">{fileTypeLabel(f)}</div>
-                                </div>
-                              </div>
-                            </li>
-                          );
-                        })}
-                        {pagedItems.length < items.length && (
-                          <li className="text-center">
-                            <button onClick={() => setPage(p => p + 1)} className="px-4 py-2 text-sm rounded-xl bg-white/10 hover:bg-white/20">Load more</button>
-                          </li>
-                        )}
-                        {items.length === 0 && <li className="text-slate-400 text-sm">No items here.</li>}
-                      </>
-                    )}
-                  </ul>
-                )}
+                      {items.length === 0 && <li className="text-slate-400 text-sm">No items here.</li>}
+                    </>
+                  )}
+                </ul>
               </div>
             )}
           </motion.div>
@@ -678,11 +615,11 @@ export default function LabsPage() {
         </div>
       </main>
 
-      {/* Preview Modal — iOS-safe overlay */}
+      {/* Preview Modal — mobile-safe overlay */}
       <AnimatePresence>
         {preview && (
           <motion.div
-            className={`${isiOS ? 'absolute' : 'fixed'} inset-0 bg-black/70 z-50 grid place-items-center px-4`}
+            className={`${isMobile ? 'absolute' : 'fixed'} inset-0 bg-black/70 z-50 grid place-items-center px-4`}
             initial={motionOK ? { opacity: 0 } : false}
             animate={motionOK ? { opacity: 1 } : false}
             exit={motionOK ? { opacity: 0 } : false}
