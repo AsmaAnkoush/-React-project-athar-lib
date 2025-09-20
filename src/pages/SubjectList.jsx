@@ -1,30 +1,26 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import {
   FolderOpen, File, FileText, FileCode, Image as ImageIcon,
   FileArchive, FileSpreadsheet, FileAudio2, FileVideo2, Presentation,
   X, Zap, ChevronLeft, ChevronRight, Upload
 } from "lucide-react";
-// ==== Feedback trigger helper ====
+
+/* ===================== Feedback trigger helper ===================== */
 const LS_TRIGGER_KEY = "eleclib_feedback_trigger";
 const LS_COUNT_KEY   = "eleclib_feedback_open_count";
 
 function bumpFeedbackCounterAndTrigger() {
   try {
-    // لو جاهز أصلاً، ما نعيد
     if (localStorage.getItem(LS_TRIGGER_KEY) === "1") return;
-
     const n = parseInt(localStorage.getItem(LS_COUNT_KEY) || "0", 10) + 1;
     localStorage.setItem(LS_COUNT_KEY, String(n));
-
     if (n >= 7) {
       localStorage.setItem(LS_TRIGGER_KEY, "1");
-      // حتى يفتح المودال فوراً بدون ريفرش
       window.dispatchEvent(new Event("eleclib:feedback"));
     }
   } catch {}
 }
-
 
 /********************
  * CONFIG
@@ -33,6 +29,14 @@ const ROOT_FOLDER_ID = "1iPnlPlC-LzXE_jTn7KIk3EFD02_9cVyD";
 const KAREEM_FACEBOOK_URL = "https://www.facebook.com/kareem.taha.7146";
 const API_KEY = "AIzaSyA_yt7VNybzoM2GNsqgl196TefA8uT33Qs";
 const FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdQ6L8wNp28GjRytOy06fmm6knEhDjny0TdLgHi-i1hMeA2tw/viewform";
+
+/********************
+ * iOS DETECTION (لتفعيل/تعطيل blur حسب الجهاز)
+ ********************/
+const isIOS =
+  typeof navigator !== "undefined" &&
+  ( /iP(ad|hone|od)/.test(navigator.platform) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) );
 
 /********************
  * HELPERS
@@ -81,7 +85,7 @@ function highlightMatch(text, query) {
   const regex = new RegExp(`(${escapeRegExp(q)})`, "ig");
   const parts = String(text).split(regex);
   return parts.map((part, i) =>
-    regex.test(part)
+    part.toLowerCase() === q.toLowerCase()
       ? <span key={i} className="bg-yellow-400/40 text-yellow-100 px-1 rounded">{part}</span>
       : <span key={i}>{part}</span>
   );
@@ -139,7 +143,8 @@ async function listChildren({ parentId, onlyFolders = false }) {
   const mimeFilter = onlyFolders ? " and mimeType='application/vnd.google-apps.folder'" : "";
   const q = encodeURIComponent(`'${parentId}' in parents and trashed=false${mimeFilter}`);
   const fields = encodeURIComponent("files(id,name,mimeType,modifiedTime,webViewLink,webContentLink)");
-  const url = `${base}?q=${q}&key=${API_KEY}&fields=nextPageToken,${fields}&pageSize=1000&orderBy=folder,name&supportsAllDrives=true&includeItemsFromAllDrives=true`;
+  // تخفيف الحمل: 200 بدل 1000
+  const url = `${base}?q=${q}&key=${API_KEY}&fields=nextPageToken,${fields}&pageSize=200&orderBy=folder,name&supportsAllDrives=true&includeItemsFromAllDrives=true`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Drive HTTP ${res.status}`);
   const data = await res.json();
@@ -147,6 +152,8 @@ async function listChildren({ parentId, onlyFolders = false }) {
 }
 
 export default function AllSubjects() {
+  const prefersReducedMotion = useReducedMotion();
+
   const [search, setSearch] = useState("");
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [pathStack, setPathStack] = useState([]);
@@ -161,6 +168,9 @@ export default function AllSubjects() {
   // نفس منطق صفحة اللابات: حفظ وضع التمرير والرجوع لنفس المكان
   const previewPushedRef = useRef(false);
   const scrollYRef = useRef(0);
+
+  // قفل زر الرجوع حتى لا “يعلق”
+  const backBusyRef = useRef(false);
 
   useEffect(() => {
     async function fetchSubjects() {
@@ -195,7 +205,7 @@ export default function AllSubjects() {
     previewPushedRef.current = false;
   }
 
-  // Back/History (مطابق للابات)
+  // Back/History (مطابق للّابات)
   useEffect(() => {
     const onPop = () => {
       if (preview) {
@@ -211,13 +221,62 @@ export default function AllSubjects() {
     return () => window.removeEventListener("popstate", onPop);
   }, [preview, pathStack.length, selectedSubject]);
 
-  function backOne() {
-    if (window.history.length > 1) window.history.back();
-    else {
-      if (preview) { setPreview(null); previewPushedRef.current = false; window.scrollTo(0, scrollYRef.current || 0); return; }
-      if (pathStack.length > 1) { setPathStack((p) => p.slice(0, -1)); return; }
-      if (selectedSubject) { resetAll(); return; }
+  /* ==== زر الرجوع داخل الواجهة (Fail-Safe لـ iOS) ==== */
+  function backOneUI() {
+    if (backBusyRef.current) return;
+    backBusyRef.current = true;
+
+    // 1) إغلاق المعاينة إن كانت مفتوحة
+    if (preview) {
+      setPreview(null);
+      previewPushedRef.current = false;
+      requestAnimationFrame(() => window.scrollTo(0, scrollYRef.current || 0));
+      backBusyRef.current = false;
+      return;
     }
+
+    // 2) التراجع مستوى داخل المجلدات
+    if (pathStack.length > 1) {
+      setPathStack((p) => p.slice(0, -1));
+      backBusyRef.current = false;
+      return;
+    }
+
+    // 3) الرجوع من داخل مادة إلى صفحة جميع المواد
+    if (selectedSubject) {
+      resetAll();
+      backBusyRef.current = false;
+      return;
+    }
+
+    // 4) على الصفحة الرئيسية: إذا ما في تاريخ نرجع له، فكّ القفل
+    if (window.history.length <= 1) {
+      backBusyRef.current = false;
+      return;
+    }
+
+    // خطة طوارئ لـ iOS
+    const emergencyUnlock = () => { backBusyRef.current = false; };
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") emergencyUnlock();
+    };
+    window.addEventListener("pagehide", emergencyUnlock, { once: true });
+    document.addEventListener("visibilitychange", onVisibility, { once: true });
+
+    const onPopOnce = () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      backBusyRef.current = false;
+    };
+    window.addEventListener("popstate", onPopOnce, { once: true });
+
+    window.history.back();
+
+    // فكّ القفل إن ما صار popstate بسرعة (iOS/بطء)
+    setTimeout(() => {
+      window.removeEventListener("popstate", onPopOnce);
+      document.removeEventListener("visibilitychange", onVisibility);
+      if (backBusyRef.current) backBusyRef.current = false;
+    }, 200);
   }
 
   const subjectsList = useMemo(() => {
@@ -256,16 +315,20 @@ export default function AllSubjects() {
     fetchFolder();
   }, [pathStack]);
 
- function openFolder(folder) {
-  setPathStack((prev) => [...prev, { id: folder.id, name: folder.name }]);
-  window.history.pushState({ view: "folder", id: folder.id }, "");
-}
-function openFile(f) {
-  setPreview(f);
-  window.history.pushState({ view: "preview", id: f.id }, "");
-  bumpFeedbackCounterAndTrigger();     // 👈 هون
-}
+  function openFolder(folder) {
+    setPathStack((prev) => [...prev, { id: folder.id, name: folder.name }]);
+    window.history.pushState({ view: "folder", id: folder.id }, "");
+  }
 
+  function openFile(f) {
+    scrollYRef.current = window.scrollY || 0;
+    if (!previewPushedRef.current) {
+      window.history.pushState({ view: "preview", id: f.id }, "");
+      previewPushedRef.current = true;
+    }
+    setPreview(f);
+    bumpFeedbackCounterAndTrigger();
+  }
 
   function goToLevel(index) {
     setPathStack((prev) => prev.slice(0, index + 1));
@@ -287,15 +350,10 @@ function openFile(f) {
     setPreview(arr[next]);
   }, [preview, navigableImages]);
 
-  
-
   function closePreviewAll() {
     setPreview(null);
-    if (previewPushedRef.current) {
-      window.history.back();
-    }
     previewPushedRef.current = false;
-    setTimeout(() => window.scrollTo(0, scrollYRef.current || 0), 0);
+    requestAnimationFrame(() => window.scrollTo(0, scrollYRef.current || 0));
   }
 
   useEffect(() => {
@@ -311,44 +369,45 @@ function openFile(f) {
 
   return (
     <div className="relative min-h-screen flex items-start justify-center px-4 py-10">
-      {/* خلفية فيديو (مطابقة) */}
+      {/* خلفية فيديو — تبقى متحركة */}
       <video
         autoPlay
         muted
         loop
         playsInline
         preload="auto"
-        className="fixed inset-0 z-0 w-full h-full object-cover"
+        poster={process.env.PUBLIC_URL + "/videos/elec-bg-poster.jpg"}
+        className="fixed inset-0 z-0 w-full h-full object-cover will-change-transform"
         aria-hidden="true"
       >
         <source src={process.env.PUBLIC_URL + "/videos/elec-bg.mp4"} type="video/mp4" />
       </video>
 
-      {/* طبقة خفيفة فوق الفيديو */}
-      <div className="fixed inset-0 z-[1] bg-transparent backdrop-blur-none" />
+      {/* طبقة خفيفة فوق الفيديو: blur على غير iOS، وبدونه على iOS */}
+      <div className={`fixed inset-0 z-[1] ${isIOS ? "bg-black/70" : "bg-black/60 backdrop-blur-sm"}`} />
 
       <main className="relative z-10 w-full max-w-6xl text-white">
         <h2
-  className="
-    text-4xl md:text-5xl font-extrabold tracking-tight leading-tight
-    bg-gradient-to-r from-orange-400 via-orange-500 to-amber-300
-    text-transparent bg-clip-text
-    drop-shadow-[0_6px_20px_rgba(251,146,60,0.35)]
-    text-center mb-8
-  "
->
-  Electrical Engineering Courses
-</h2>
-
+          className="
+            text-4xl md:text-5xl font-extrabold tracking-tight leading-tight
+            bg-gradient-to-r from-orange-400 via-orange-500 to-amber-300
+            text-transparent bg-clip-text
+            drop-shadow-[0_6px_20px_rgba(251,146,60,0.35)]
+            text-center mb-8
+          "
+        >
+          Electrical Engineering Courses
+        </h2>
 
         {/* Back مطابق للّابات */}
         {!selectedSubject && (
           <div className="mb-4 flex justify-start">
             <button
-              onClick={backOne}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition"
+              onClick={backOneUI}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
               title="Back"
               aria-label="Back"
+              disabled={!!preview || !!selectedSubject || pathStack.length > 1}
             >
               <ChevronLeft size={18} />
               <span>Back</span>
@@ -370,57 +429,88 @@ function openFile(f) {
 
         {!selectedSubject && (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-            <AnimatePresence>
-              {subjectsList.map((subj) => {
-                const q = search.trim();
-                return (
-                  <motion.button
-                    key={subj.id}
-                    onClick={() => handleSelectSubject(subj)}
-                    className="group text-left block w-full"
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <div className="bg-gradient-to-br from-neutral-800 to-neutral-900 text-white rounded-2xl p-5 shadow-lg border border-white/10 backdrop-blur-md transition-transform duration-200 group-hover:scale-[1.03] hover:border-orange-500 flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-orange-500/20 text-orange-300 grid place-items-center shadow-inner">
-                        <Zap size={18} />
+            {!prefersReducedMotion ? (
+              <AnimatePresence>
+                {subjectsList.map((subj) => {
+                  const q = search.trim();
+                  return (
+                    <motion.button
+                      key={subj.id}
+                      onClick={() => handleSelectSubject(subj)}
+                      className="group text-left block w-full will-change-transform"
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -8 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <div className="bg-gradient-to-br from-neutral-800 to-neutral-900 text-white rounded-2xl p-5 shadow-lg border border-white/10 transition-transform duration-200 group-hover:scale-[1.03] hover:border-orange-500 flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-orange-500/20 text-orange-300 grid place-items-center">
+                          <Zap size={18} />
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-orange-300 text-base mb-0.5">
+                            {highlightMatch(subj.code, q)}
+                          </h4>
+                          <p className="text-slate-200 text-sm truncate">
+                            {highlightMatch(subj.name || "", q)}
+                          </p>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <h4 className="font-bold text-orange-300 text-base mb-0.5">
-                          {highlightMatch(subj.code, q)}
-                        </h4>
-                        <p className="text-slate-200 text-sm truncate">
-                          {highlightMatch(subj.name || "", q)}
-                        </p>
+                    </motion.button>
+                  );
+                })}
+                {subjectsList.length === 0 && subjects.length > 0 && (
+                  <p className="text-center col-span-full text-slate-400 text-sm mt-4">No subjects found.</p>
+                )}
+              </AnimatePresence>
+            ) : (
+              <>
+                {subjectsList.map((subj) => {
+                  const q = search.trim();
+                  return (
+                    <button
+                      key={subj.id}
+                      onClick={() => handleSelectSubject(subj)}
+                      className="group text-left block w-full"
+                    >
+                      <div className="bg-gradient-to-br from-neutral-800 to-neutral-900 text-white rounded-2xl p-5 shadow-lg border border-white/10 transition hover:border-orange-500 flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-orange-500/20 text-orange-300 grid place-items-center">
+                          <Zap size={18} />
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-orange-300 text-base mb-0.5">
+                            {highlightMatch(subj.code, q)}
+                          </h4>
+                          <p className="text-slate-200 text-sm truncate">
+                            {highlightMatch(subj.name || "", q)}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  </motion.button>
-                );
-              })}
-              {subjectsList.length === 0 && subjects.length > 0 && (
-                <p className="text-center col-span-full text-slate-400 text-sm mt-4">
-                  No subjects found.
-                </p>
-              )}
-            </AnimatePresence>
+                    </button>
+                  );
+                })}
+                {subjectsList.length === 0 && subjects.length > 0 && (
+                  <p className="text-center col-span-full text-slate-400 text-sm mt-4">No subjects found.</p>
+                )}
+              </>
+            )}
           </div>
         )}
 
         {selectedSubject && (
           <motion.div
             className="bg-white/5 rounded-2xl p-4 md:p-6 border border-white/10 shadow-xl mt-4"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
+            animate={prefersReducedMotion ? false : { opacity: 1, y: 0 }}
             transition={{ duration: 0.25 }}
           >
             <div className="mb-4">
               <button
-                onClick={backOne}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition"
+                onClick={backOneUI}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Back"
                 aria-label="Back"
+                disabled={loading}
               >
                 <ChevronLeft size={18} />
                 <span>Back</span>
@@ -466,40 +556,72 @@ function openFile(f) {
             {/* العناصر */}
             {!loading && !err && (
               <ul className="mt-5 space-y-3">
-                <AnimatePresence>
-                  {items.map((f) => {
-                    const { Icon, tone } = pickIcon({ mime: f.mimeType, isFolderFlag: isFolder(f.mimeType), name: f.name });
-                    const isDir = isFolder(f.mimeType);
-const onClick = () => {
-  if (isDir) openFolder(f);
-  else openFile(f);                    // 👈 بدال setPreview المباشر
-};
-
-                    return (
-                      <motion.li
-                        key={f.id}
-                        onClick={onClick}
-                        className="rounded-2xl bg-gradient-to-br from-neutral-900 to-neutral-950 border border-white/10 p-4 transition hover:border-orange-500 cursor-pointer"
-                        initial={{ opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -6 }}
-                      >
-                        <div className="flex gap-4">
-                          <div className={`w-12 h-12 rounded-2xl grid place-items-center ${tone} shadow-inner shrink-0`}>
-                            <Icon size={22} />
+                {!prefersReducedMotion ? (
+                  <AnimatePresence>
+                    {items.map((f) => {
+                      const { Icon, tone } = pickIcon({ mime: f.mimeType, isFolderFlag: isFolder(f.mimeType), name: f.name });
+                      const isDir = isFolder(f.mimeType);
+                      const onClick = () => {
+                        if (isDir) openFolder(f);
+                        else openFile(f);
+                      };
+                      return (
+                        <motion.li
+                          key={f.id}
+                          onClick={onClick}
+                          className="rounded-2xl bg-gradient-to-br from-neutral-900 to-neutral-950 border border-white/10 p-4 transition hover:border-orange-500 cursor-pointer will-change-transform"
+                          initial={{ opacity: 0, y: 6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -6 }}
+                        >
+                          <div className="flex gap-4">
+                            <div className={`w-12 h-12 rounded-2xl grid place-items-center ${tone} shrink-0`}>
+                              <Icon size={22} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-white text-sm md:text-base font-medium break-words whitespace-normal sm:truncate">
+                                {f.name}
+                              </h4>
+                              <div className="text-xs text-slate-400 mt-1">{fileTypeLabel(f)}</div>
+                            </div>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <h4 className="text-white text-sm md:text-base font-medium break-words whitespace-normal sm:truncate">
-                              {f.name}
-                            </h4>
-                            <div className="text-xs text-slate-400 mt-1">{fileTypeLabel(f)}</div>
+                        </motion.li>
+                      );
+                    })}
+                    {items.length === 0 && <li className="text-slate-400 text-sm">No items here.</li>}
+                  </AnimatePresence>
+                ) : (
+                  <>
+                    {items.map((f) => {
+                      const { Icon, tone } = pickIcon({ mime: f.mimeType, isFolderFlag: isFolder(f.mimeType), name: f.name });
+                      const isDir = isFolder(f.mimeType);
+                      const onClick = () => {
+                        if (isDir) openFolder(f);
+                        else openFile(f);
+                      };
+                      return (
+                        <li
+                          key={f.id}
+                          onClick={onClick}
+                          className="rounded-2xl bg-gradient-to-br from-neutral-900 to-neutral-950 border border-white/10 p-4 transition hover:border-orange-500 cursor-pointer"
+                        >
+                          <div className="flex gap-4">
+                            <div className={`w-12 h-12 rounded-2xl grid place-items-center ${tone} shrink-0`}>
+                              <Icon size={22} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-white text-sm md:text-base font-medium break-words whitespace-normal sm:truncate">
+                                {f.name}
+                              </h4>
+                              <div className="text-xs text-slate-400 mt-1">{fileTypeLabel(f)}</div>
+                            </div>
                           </div>
-                        </div>
-                      </motion.li>
-                    );
-                  })}
-                  {items.length === 0 && <li className="text-slate-400 text-sm">No items here.</li>}
-                </AnimatePresence>
+                        </li>
+                      );
+                    })}
+                    {items.length === 0 && <li className="text-slate-400 text-sm">No items here.</li>}
+                  </>
+                )}
               </ul>
             )}
           </motion.div>
@@ -523,10 +645,9 @@ const onClick = () => {
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm leading-relaxed text-slate-100" dir="rtl">
-          <div className="text-orange-400 font-semibold mb-2 text-center">
-  وأنت بتدرس، لا تنسى أهلنا في غزة
-</div>
-
+            <div className="text-orange-400 font-semibold mb-2 text-center">
+              وأنت بتدرس، لا تنسى أهلنا في غزة
+            </div>
             <p className="whitespace-pre-line">
               اللهم يا رحيم، يا قوي، يا جبار، كن لأهل غزة عونًا ونصيرًا، اللهم احفظهم بحفظك، وأمنهم بأمانك، واشفِ جرحاهم،
               وتقبل شهداءهم، واربط على قلوبهم، وأبدل خوفهم أمنًا، وحزنهم فرحًا، وضعفهم قوة، اللهم عجّل لهم بالفرج والنصر المبين،
@@ -535,35 +656,36 @@ const onClick = () => {
           </div>
 
           <div className="flex justify-center">
-          <a
-  href={FORM_URL}
-  target="_blank"
-  rel="noreferrer"
-  className="flex items-center gap-2 px-5 py-3 rounded-xl bg-orange-400 hover:bg-orange-500 text-white text-sm transition"
-  title="Upload to Pending"
->
-  <Upload size={16} />
-  Upload File
-</a>
-
+            <a
+              href={FORM_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-2 px-5 py-3 rounded-xl bg-orange-400 hover:bg-orange-500 text-white text-sm transition"
+              title="Upload to Pending"
+            >
+              <Upload size={16} />
+              Upload File
+            </a>
           </div>
 
           <p className="text-center text-xs text-slate-300">© 2025 - ElecLib</p>
         </div>
       </main>
 
-      {/* Preview Modal مطابق للّابات (حجم كبير + زر Download دائم) */}
+      {/* Preview Modal مطابق للّابات (مع تحسين iOS) */}
       <AnimatePresence>
         {preview && (
           <motion.div
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 grid place-items-center px-4"
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className={`fixed inset-0 z-50 grid place-items-center px-4 ${isIOS ? "bg-black/70" : "bg-black/60 backdrop-blur-sm"}`}
+            initial={prefersReducedMotion ? false : { opacity: 0 }}
+            animate={prefersReducedMotion ? false : { opacity: 1 }}
+            exit={prefersReducedMotion ? false : { opacity: 0 }}
           >
             <motion.div
-              className="relative bg-neutral-900 border border-white/10 rounded-2xl w-full max-w-[95vw] md:max-w-[90vw] max-h-[92vh] overflow-hidden shadow-2xl flex flex-col"
-              initial={{ scale: 0.96, y: 12, opacity: 0 }}
-              animate={{ scale: 1, y: 0, opacity: 1 }}
-              exit={{ scale: 0.96, y: 12, opacity: 0 }}
+              className="relative bg-neutral-900 border border-white/10 rounded-2xl w-full max-w-[95vw] md:max-w-[90vw] max-h-[92vh] overflow-hidden shadow-xl flex flex-col"
+              initial={prefersReducedMotion ? false : { scale: 0.96, y: 12, opacity: 0 }}
+              animate={prefersReducedMotion ? false : { scale: 1, y: 0, opacity: 1 }}
+              exit={prefersReducedMotion ? false : { scale: 0.96, y: 12, opacity: 0 }}
             >
               {/* Header */}
               <div className="flex items-center justify-between p-4 border-b border-white/10 shrink-0">
@@ -603,6 +725,7 @@ const onClick = () => {
                   className="w-full h-[60vh] md:h-[60vh] rounded-lg border-0"
                   allow="autoplay"
                   allowFullScreen
+                  loading="lazy"
                 />
               </div>
 
