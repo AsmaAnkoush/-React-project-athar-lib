@@ -7,13 +7,11 @@ import {
 } from "lucide-react";
 
 /* =========================================================
-   Subjects page cloned to match Labs page behavior exactly
-   - Video background ALWAYS on (incl. iOS)
-   - Mobile/tablet: open non-images in Drive preview (new tab) to avoid jank
-   - Desktop: preview modal for all types
-   - Safe Back button on root (history.back with unlock)
-   - AbortController for Drive fetches (no leaks)
-   - Debounced search; tidy UI
+   AllSubjects rewritten to match LabsPage behavior & UX
+   - Same interaction model (video bg always on, mobile optimizations)
+   - Mobile: non-images open in SAME TAB, images in modal
+   - Desktop: modal preview for all
+   - List paging, AbortController, image alt=media, history-safe Back
    ========================================================= */
 
 /* ===================== Feedback trigger helper ===================== */
@@ -31,19 +29,16 @@ function bumpFeedbackCounterAndTrigger() {
   } catch {}
 }
 
-/* ===================== CONFIG (same keys/links style) ===================== */
+/********************
+ * CONFIG (Subjects)
+ ********************/
 const API_KEY = "AIzaSyA_yt7VNybzoM2GNsqgl196TefA8uT33Qs";
-const SUBJECTS_ROOT_FOLDER_ID = "1iPnlPlC-LzXE_jTn7KIk3EFD02_9cVyD"; // <-- root of courses
+const SUBJECTS_ROOT_FOLDER_ID = "1iPnlPlC-LzXE_jTn7KIk3EFD02_9cVyD"; // from your original AllSubjects
+
 const FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdQ6L8wNp28GjRytOy06fmm6knEhDjny0TdLgHi-i1hMeA2tw/viewform";
 const KAREEM_FACEBOOK_URL = "https://www.facebook.com/kareem.taha.7146";
 
-/* ===================== iOS detection (blur off on iOS) ===================== */
-const isIOS =
-  typeof navigator !== "undefined" &&
-  ( /iP(ad|hone|od)/.test(navigator.platform) ||
-    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) );
-
-/* ===================== Helpers (same as Labs) ===================== */
+/* ===================== Helpers (copied from LabsPage) ===================== */
 const isFolder = (mime) => mime === "application/vnd.google-apps.folder";
 const isImageFile = (f) =>
   f?.mimeType?.startsWith("image/") || /\.(png|jpe?g|gif|webp|svg)$/i.test((f?.name || "").toLowerCase());
@@ -55,6 +50,7 @@ function fileTypeLabel(f) {
   return ext.toUpperCase();
 }
 
+/** روابط عرض/تنزيل موحّدة */
 function getUniversalDownloadLink(file) {
   if (!file) return null;
   if (file.mimeType?.startsWith("application/vnd.google-apps")) {
@@ -63,6 +59,10 @@ function getUniversalDownloadLink(file) {
   }
   if (file.webContentLink) return file.webContentLink;
   return `https://drive.google.com/uc?export=download&id=${file.id}`;
+}
+
+function getImageMediaUrl(file) {
+  return `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media&key=${API_KEY}`;
 }
 
 function pickIcon({ mime, isFolderFlag, name = "" }) {
@@ -96,9 +96,9 @@ function highlightMatch(text, query) {
   );
 }
 
-// نفس دالة تقسيم اسم اللاب (نستخدمها لتناسق مع صفحة اللابات)
-function parseLabFromFolderName(name) {
-  const rx = /^\s*([A-Za-z]{3,}\d{3,})\s*[-_/:\s]+\s*(.+)\s*$/;
+// تقسيم اسم مجلد إلى code و name (نفس منطق اللابات)
+function parseEntryFromFolderName(name) {
+  const rx = /^\s*([A-Za-z]{3,}\d{3,})\s*[-/_:\s]+\s*(.+)\s*$/;
   const m = name?.match(rx);
   if (m) return { code: m[1].toUpperCase(), name: m[2] };
   return { code: name || "COURSE", name: "" };
@@ -114,7 +114,7 @@ function useDebouncedValue(value, delay = 220) {
   return v;
 }
 
-/* ===================== Drive API ===================== */
+/* API: إرجاع العناصر داخل مجلد */
 async function listChildren({ parentId, onlyFolders = false, signal }) {
   const base = "https://www.googleapis.com/drive/v3/files";
   const mimeFilter = onlyFolders ? " and mimeType='application/vnd.google-apps.folder'" : "";
@@ -134,6 +134,7 @@ async function listChildren({ parentId, onlyFolders = false, signal }) {
 export default function AllSubjects() {
   const prefersReducedMotion = useReducedMotion();
   const isMobile = typeof window !== 'undefined' && window.matchMedia?.('(pointer:coarse)').matches;
+  const motionOK = !isMobile && !prefersReducedMotion;
 
   // بحث وقائمة المواد
   const [search, setSearch] = useState("");
@@ -143,7 +144,7 @@ export default function AllSubjects() {
   const [subjectsErr, setSubjectsErr] = useState("");
 
   // التصفح داخل مادة
-  const [selectedSubject, setSelectedSubject] = useState(null); // { id, code, name }
+  const [selectedCourse, setSelectedCourse] = useState(null); // { id, code, name }
   const [pathStack, setPathStack] = useState([]); // [{id, name}]
   const [items, setItems] = useState([]);
 
@@ -151,12 +152,18 @@ export default function AllSubjects() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [preview, setPreview] = useState(null);
+  const [imgError, setImgError] = useState(false);
 
   // History/scroll
   const scrollYRef = useRef(0);
+
+  // قفل النقرات السريعة على زر الرجوع في الواجهة
   const backBusyRef = useRef(false);
 
-  /* ===== جلب مجلدات المواد من الجذر ===== */
+  // منع الفتح المزدوج على الموبايل (double‑tap)
+  const tapGuardRef = useRef(0);
+
+  /* ===== تحميل مجلدات المواد من مجلد الجذر ===== */
   useEffect(() => {
     let controller = new AbortController();
     async function fetchSubjects() {
@@ -168,7 +175,7 @@ export default function AllSubjects() {
       try {
         const folders = await listChildren({ parentId: SUBJECTS_ROOT_FOLDER_ID, onlyFolders: true, signal: controller.signal });
         const mapped = folders.map((f) => {
-          const parsed = parseLabFromFolderName(f.name);
+          const parsed = parseEntryFromFolderName(f.name);
           return { id: f.id, code: parsed.code, name: parsed.name, link: f.webViewLink };
         }).sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: "base" }));
         setSubjects(mapped);
@@ -186,18 +193,20 @@ export default function AllSubjects() {
   }, []);
 
   function resetAll() {
-    setSelectedSubject(null);
+    setSelectedCourse(null);
     setPathStack([]);
     setItems([]);
     setErr("");
     setPreview(null);
+    setImgError(false);
   }
 
-  /* ==== زر الرجوع داخل الواجهة (نفس اللابات) ==== */
+  /* ==== زر الرجوع داخل الواجهة ==== */
   function backOneUI() {
     if (backBusyRef.current) return;
     backBusyRef.current = true;
 
+    // 1) إغلاق المعاينة إن كانت مفتوحة
     if (preview) {
       setPreview(null);
       requestAnimationFrame(() => window.scrollTo(0, scrollYRef.current || 0));
@@ -205,18 +214,21 @@ export default function AllSubjects() {
       return;
     }
 
+    // 2) التراجع مستوى داخل المجلدات
     if (pathStack.length > 1) {
       setPathStack((p) => p.slice(0, -1));
       backBusyRef.current = false;
       return;
     }
 
-    if (selectedSubject) {
+    // 3) الرجوع من داخل مادة إلى صفحة جميع المواد
+    if (selectedCourse) {
       resetAll();
       backBusyRef.current = false;
       return;
     }
 
+    // 4) على الصفحة الرئيسية: ارجع للي قبلها في المتصفح مباشرة وبأمان
     const onPopOnce = () => {
       window.removeEventListener('popstate', onPopOnce);
       backBusyRef.current = false;
@@ -230,10 +242,10 @@ export default function AllSubjects() {
   }
 
   /* ===== اختيار مادة ===== */
-  function handleSelectSubject(subj) {
-    if (!subj?.id) return;
-    setSelectedSubject(subj);
-    setPathStack([{ id: subj.id, name: subj.name }]);
+  function handleSelectCourse(course) {
+    if (!course?.id) return;
+    setSelectedCourse(course);
+    setPathStack([{ id: course.id, name: course.name }]);
   }
 
   /* ===== تحميل العناصر للمجلد الحالي ===== */
@@ -272,7 +284,7 @@ export default function AllSubjects() {
     setPathStack((prev) => prev.slice(0, index + 1));
   }
 
-  /* ===== Preview (مطابق) ===== */
+  /* ===== Preview ===== */
   const navigableImages = useMemo(
     () => items.filter((f) => !isFolder(f.mimeType) && isImageFile(f)),
     [items]
@@ -289,33 +301,82 @@ export default function AllSubjects() {
 
   function openPreview(f) {
     scrollYRef.current = window.scrollY || 0;
-    // على الموبايل: افتح غير الصور في تبويب Drive preview لتفادي التحميل التلقائي
+
+    const now = Date.now();
+    if (now - (tapGuardRef.current || 0) < 700) return;
+    tapGuardRef.current = now;
+
     if (isMobile && !isImageFile(f)) {
       const url = `https://drive.google.com/file/d/${f.id}/preview`;
-      window.open(url, '_blank');
+      try { window.location.assign(url); } catch { window.location.href = url; }
       return;
     }
+
+    setImgError(false);
     setPreview(f);
     bumpFeedbackCounterAndTrigger();
   }
 
-  /* ===== نتائج البحث ===== */
+  function closePreviewAll() {
+    setPreview(null);
+    setImgError(false);
+    requestAnimationFrame(() => window.scrollTo(0, scrollYRef.current || 0));
+  }
+
+  useEffect(() => { setImgError(false); }, [preview?.id]);
+
+  // كيبورد
+  useEffect(() => {
+    if (!preview) return;
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") { e.preventDefault(); closePreviewAll(); return; }
+      if (e.key === "ArrowLeft") { e.preventDefault(); navAny("prev"); }
+      if (e.key === "ArrowRight") { e.preventDefault(); navAny("next"); }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [preview, navAny]);
+
+  /* ===== نتائج البحث للمواد ===== */
   const subjectsList = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
     if (!q) return subjects;
-    return subjects.filter((s) => s.code.toLowerCase().includes(q) || (s.name||"").toLowerCase().includes(q));
+    return subjects.filter((s) => s.code.toLowerCase().includes(q) || s.name.toLowerCase().includes(q));
   }, [debouncedSearch, subjects]);
 
-  /* ===================== UI ===================== */
+  // threshold to disable heavy motion
+  const MANY = isMobile ? 40 : 60;
+  const lotsOfSubjects = subjectsList.length > MANY;
+  const lotsOfItems = items.length > MANY;
+
+  // Lightweight card component (same as LabsPage)
+  const CardShell = ({ tone, Icon, title, subtitle }) => (
+    <div className="bg-gradient-to-br from-neutral-800 to-neutral-900 text-white rounded-2xl p-5 border border-white/10 transition hover:border-orange-500 flex items-center gap-3" style={{ contain: 'content' }}>
+      <div className={`w-10 h-10 rounded-xl ${tone} grid place-items-center`}>
+        <Icon size={18} />
+      </div>
+      <div className="min-w-0">
+        <h4 className="font-bold text-orange-300 text-base mb-0.5">{title}</h4>
+        {subtitle && <p className="text-slate-200 text-sm truncate">{subtitle}</p>}
+      </div>
+    </div>
+  );
+
+  // Paging
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 80;
+  const pagedItems = useMemo(() => items.slice(0, page * PAGE_SIZE), [items, page]);
+  useEffect(() => { setPage(1); }, [items]);
+
   return (
-    <div className="relative min-h-screen flex items-start justify-center px-4 py-10">
-      {/* خلفية فيديو — تبقى متحركة */}
+    <div className="relative min-h-screen flex items-center justify-center px-4">
+      {/* خلفية فيديو — مفعّلة على كل الأجهزة */}
       <video
         autoPlay
         muted
         loop
         playsInline
-        preload="auto"
+        preload="metadata"
         poster={process.env.PUBLIC_URL + "/videos/elec-bg-poster.jpg"}
         className="fixed inset-0 z-0 w-full h-full object-cover will-change-transform"
         aria-hidden="true"
@@ -323,95 +384,103 @@ export default function AllSubjects() {
         <source src={process.env.PUBLIC_URL + "/videos/elec-bg.mp4"} type="video/mp4" />
       </video>
 
-      {/* طبقة فوق الفيديو */}
-      <div className={`fixed inset-0 z-[1] ${isIOS ? "bg-black/70" : "bg-black/60 backdrop-blur-sm"}`} />
+      {/* طبقة بسيطة فوق الخلفية */}
+      <div className="fixed inset-0 z-[1] bg-black/30" />
 
-      <main className="relative z-10 w-full max-w-6xl text-white">
-        <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight leading-tight bg-gradient-to-r from-orange-400 via-orange-500 to-amber-300 text-transparent bg-clip-text drop-shadow-[0_6px_20px_rgba(251,146,60,0.35)] text-center mb-8">
+      <main className="relative z-10 w-full max-w-6xl text-white py-10">
+        <h2
+          className="text-4xl md:text-5xl font-extrabold tracking-tight leading-tight bg-gradient-to-r from-orange-400 via-orange-500 to-amber-300 text-transparent bg-clip-text drop-shadow-[0_6px_20px_rgba(251,146,60,0.35)] text-center"
+        >
           Electrical Engineering Courses
         </h2>
 
-        {/* زر Back على الرئيسية */}
-        {!selectedSubject && (
+        {/* زر رجوع على الصفحة الرئيسية للمواد */}
+        {!selectedCourse && (
           <div className="mb-4 flex justify-start">
             <button
               onClick={backOneUI}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
               title="Back"
-              aria-label="Back"
-              disabled={!!preview || !!selectedSubject || pathStack.length > 1}
+              disabled={!!preview || !!selectedCourse || pathStack.length > 1}
             >
               <ChevronLeft size={18} />
-              <span>Back</span>
+              Back
             </button>
           </div>
         )}
 
-        {/* البحث */}
-        {!selectedSubject && (
-          <div className="mb-6 flex justify-center">
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by code or course name…"
-              className="w-full max-w-md px-5 py-3 rounded-full text-sm bg-white/10 placeholder-white/80 text-white border border-white/20 focus:outline-none focus:ring-2 focus:ring-orange-500 shadow-lg"
-            />
-          </div>
-        )}
+        {/* الصفحة الرئيسية للمواد */}
+        {!selectedCourse && (
+          <>
+            {/* البحث */}
+            <div className="mb-6 flex justify-center">
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search by code or course name…"
+                className="w-full max-w-md px-5 py-3 rounded-full text-sm bg-white/10 placeholder-white/80 text-white border border-white/20 focus:outline-none focus:ring-2 focus:ring-orange-500"
+              />
+            </div>
 
-        {/* شبكة المواد */}
-        {!selectedSubject && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-            <AnimatePresence>
-              {subjectsLoading && <div className="col-span-full text-center text-slate-300 text-sm">Loading…</div>}
-              {!subjectsLoading && subjectsErr && (
-                <p className="text-center col-span-full text-rose-300 text-sm mt-4">{subjectsErr}</p>
+            {/* شبكة المواد */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+              {motionOK && !lotsOfSubjects ? (
+                <AnimatePresence>
+                  {subjectsLoading && <div className="col-span-full text-center text-slate-300 text-sm">Loading courses…</div>}
+                  {!subjectsLoading && subjectsErr && (
+                    <p className="text-center col-span-full text-rose-300 text-sm mt-4">{subjectsErr}</p>
+                  )}
+                  {!subjectsLoading && !subjectsErr && subjectsList.map((course) => {
+                    const q = debouncedSearch.trim();
+                    return (
+                      <motion.button
+                        key={course.id}
+                        onClick={() => handleSelectCourse(course)}
+                        className="group text-left block w-full"
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -8 }}
+                        transition={{ duration: 0.18 }}
+                      >
+                        <CardShell tone="bg-orange-500/20 text-orange-300" Icon={Zap} title={highlightMatch(course.code, q)} subtitle={course.name && highlightMatch(course.name, q)} />
+                      </motion.button>
+                    );
+                  })}
+                  {!subjectsLoading && !subjectsErr && subjectsList.length === 0 && (
+                    <p className="text-center col-span-full text-slate-400 text-sm mt-4">No courses found.</p>
+                  )}
+                </AnimatePresence>
+              ) : (
+                <>
+                  {subjectsLoading && <div className="col-span-full text-center text-slate-300 text-sm">Loading courses…</div>}
+                  {!subjectsLoading && subjectsErr && (
+                    <p className="text-center col-span-full text-rose-300 text-sm mt-4">{subjectsErr}</p>
+                  )}
+                  {!subjectsLoading && !subjectsErr && subjectsList.map((course) => {
+                    const q = debouncedSearch.trim();
+                    return (
+                      <button key={course.id} onClick={() => handleSelectCourse(course)} className="group text-left block w-full">
+                        <CardShell tone="bg-orange-500/20 text-orange-300" Icon={Zap} title={highlightMatch(course.code, q)} subtitle={course.name && highlightMatch(course.name, q)} />
+                      </button>
+                    );
+                  })}
+                  {!subjectsLoading && !subjectsErr && subjectsList.length === 0 && (
+                    <p className="text-center col-span-full text-slate-400 text-sm mt-4">No courses found.</p>
+                  )}
+                </>
               )}
-              {!subjectsLoading && !subjectsErr && subjectsList.map((subj) => {
-                const q = debouncedSearch.trim();
-                return (
-                  <motion.button
-                    key={subj.id}
-                    onClick={() => handleSelectSubject(subj)}
-                    className="group text-left block w-full will-change-transform"
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <div className="bg-gradient-to-br from-neutral-800 to-neutral-900 text-white rounded-2xl p-5 shadow-lg border border-white/10 transition-transform duration-200 group-hover:scale-[1.03] hover:border-orange-500 flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-orange-500/20 text-orange-300 grid place-items-center">
-                        <Zap size={18} />
-                      </div>
-                      <div className="min-w-0">
-                        <h4 className="font-bold text-orange-300 text-base mb-0.5">
-                          {highlightMatch(subj.code, q)}
-                        </h4>
-                        {subj.name && (
-                          <p className="text-slate-200 text-sm truncate">
-                            {highlightMatch(subj.name, q)}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </motion.button>
-                );
-              })}
-              {!subjectsLoading && !subjectsErr && subjectsList.length === 0 && (
-                <p className="text-center col-span-full text-slate-400 text-sm mt-4">No courses found.</p>
-              )}
-            </AnimatePresence>
-          </div>
+            </div>
+          </>
         )}
 
         {/* مستعرض المجلدات داخل المادة */}
-        {selectedSubject && (
+        {selectedCourse && (
           <motion.div
-            className="bg-white/5 rounded-2xl p-4 md:p-6 border border-white/10 shadow-xl mt-4"
-            initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
-            animate={prefersReducedMotion ? false : { opacity: 1, y: 0 }}
-            transition={{ duration: 0.25 }}
+            className="bg-white/5 rounded-2xl p-4 md:p-6 border border-white/10 mt-4"
+            initial={motionOK ? { opacity: 0, y: 8 } : false}
+            animate={motionOK ? { opacity: 1, y: 0 } : false}
+            transition={{ duration: 0.22 }}
           >
             {/* زر Back */}
             <div className="mb-4">
@@ -419,20 +488,19 @@ export default function AllSubjects() {
                 onClick={backOneUI}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Back"
-                aria-label="Back"
                 disabled={loading}
               >
                 <ChevronLeft size={18} />
-                <span>Back</span>
+                Back
               </button>
             </div>
 
             {/* عنوان المادة */}
             <div className="mb-2">
               <h3 className="text-2xl md:text-3xl font-extrabold tracking-tight flex flex-wrap items-baseline gap-2">
-                <span className="text-orange-400">{selectedSubject.code}</span>
-                {selectedSubject.name && (
-                  <span className="text-white/90">- {selectedSubject.name}</span>
+                <span className="text-orange-400">{selectedCourse.code}</span>
+                {selectedCourse.name && (
+                  <span className="text-white/90">- {selectedCourse.name}</span>
                 )}
               </h3>
             </div>
@@ -458,46 +526,79 @@ export default function AllSubjects() {
 
             {/* العناصر */}
             {!loading && !err && (
-              <ul className="mt-5 space-y-3">
-                <AnimatePresence>
-                  {items.map((f) => {
-                    const { Icon, tone } = pickIcon({ mime: f.mimeType, isFolderFlag: isFolder(f.mimeType), name: f.name });
-                    const isDir = isFolder(f.mimeType);
-                    const onClick = () => {
-                      if (isDir) openFolder(f);
-                      else openPreview(f);
-                    };
-                    return (
-                      <motion.li
-                        key={f.id}
-                        onClick={onClick}
-                        className="rounded-2xl bg-gradient-to-br from-neutral-900 to-neutral-950 border border-white/10 p-4 transition hover:border-orange-500 cursor-pointer will-change-transform"
-                        initial={{ opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -6 }}
-                      >
-                        <div className="flex gap-4">
-                          <div className={`w-12 h-12 rounded-2xl grid place-items-center ${tone} shrink-0`}>
-                            <Icon size={22} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <h4 className="text-white text-sm md:text-base font-medium break-words whitespace-normal sm:truncate">
-                              {f.name}
-                            </h4>
-                            <div className="text-xs text-slate-400 mt-1">{fileTypeLabel(f)}</div>
-                          </div>
-                        </div>
-                      </motion.li>
-                    );
-                  })}
-                  {items.length === 0 && <li className="text-slate-400 text-sm">No items here.</li>}
-                </AnimatePresence>
-              </ul>
+              <div className="mt-5">
+                <ul className="space-y-3">
+                  {motionOK && !lotsOfItems ? (
+                    <AnimatePresence>
+                      {items.map((f) => {
+                        const { Icon, tone } = pickIcon({ mime: f.mimeType, isFolderFlag: isFolder(f.mimeType), name: f.name });
+                        const isDir = isFolder(f.mimeType);
+                        const onClick = () => { isDir ? openFolder(f) : openPreview(f); };
+                        return (
+                          <motion.li
+                            key={f.id}
+                            onClick={onClick}
+                            style={{ contain: 'content' }}
+                            className="rounded-2xl bg-neutral-900 border border-white/10 p-4 hover:border-orange-500 cursor-pointer"
+                            initial={{ opacity: 0, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -6 }}
+                            transition={{ duration: 0.16 }}
+                          >
+                            <div className="flex gap-4">
+                              <div className={`w-12 h-12 rounded-2xl grid place-items-center ${tone} shrink-0`}>
+                                <Icon size={22} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h4 className="text-white text-sm md:text-base font-medium break-words whitespace-normal sm:truncate">{f.name}</h4>
+                                <div className="text-xs text-slate-400 mt-1">{fileTypeLabel(f)}</div>
+                              </div>
+                            </div>
+                          </motion.li>
+                        );
+                      })}
+                      {items.length === 0 && <li className="text-slate-400 text-sm">No items here.</li>}
+                    </AnimatePresence>
+                  ) : (
+                    <>
+                      {pagedItems.map((f) => {
+                        const { Icon, tone } = pickIcon({ mime: f.mimeType, isFolderFlag: isFolder(f.mimeType), name: f.name });
+                        const isDir = isFolder(f.mimeType);
+                        const onClick = () => { isDir ? openFolder(f) : openPreview(f); };
+                        return (
+                          <li
+                            key={f.id}
+                            onClick={onClick}
+                            style={{ contain: 'content' }}
+                            className="rounded-2xl bg-neutral-900 border border-white/10 p-4 hover:border-orange-500 cursor-pointer"
+                          >
+                            <div className="flex gap-4">
+                              <div className={`w-12 h-12 rounded-2xl grid place-items-center ${tone} shrink-0`}>
+                                <Icon size={22} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h4 className="text-white text-sm md:text-base font-medium break-words whitespace-normal sm:truncate">{f.name}</h4>
+                                <div className="text-xs text-slate-400 mt-1">{fileTypeLabel(f)}</div>
+                              </div>
+                            </div>
+                          </li>
+                        );
+                      })}
+                      {pagedItems.length < items.length && (
+                        <li className="text-center">
+                          <button onClick={() => setPage(p => p + 1)} className="px-4 py-2 text-sm rounded-xl bg-white/10 hover:bg-white/20">Load more</button>
+                        </li>
+                      )}
+                      {items.length === 0 && <li className="text-slate-400 text-sm">No items here.</li>}
+                    </>
+                  )}
+                </ul>
+              </div>
             )}
           </motion.div>
         )}
 
-        {/* Footer */}
+        {/* Footer – ثابت */}
         <div className="mt-10 space-y-4">
           <div className="rounded-2xl border border-orange-500/30 bg-orange-600/10 p-4 text-center">
             <p className="text-sm sm:text-base text-orange-200 font-medium">
@@ -514,6 +615,7 @@ export default function AllSubjects() {
             </p>
           </div>
 
+          {/* الدعاء */}
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm leading-relaxed text-slate-100" dir="rtl">
             <div className="text-orange-400 font-semibold mb-2 text-center">
               وأنت بتدرس، لا تنسى أهلنا في غزة
@@ -525,6 +627,7 @@ export default function AllSubjects() {
             </p>
           </div>
 
+          {/* Upload File */}
           <div className="flex justify-center">
             <a
               href={FORM_URL}
@@ -542,27 +645,22 @@ export default function AllSubjects() {
         </div>
       </main>
 
-      {/* Preview Modal */}
+      {/* Preview Modal — mobile-safe overlay */}
       <AnimatePresence>
         {preview && (
           <motion.div
-            className={`fixed inset-0 z-50 grid place-items-center px-4 ${isIOS ? "bg-black/70" : "bg-black/60 backdrop-blur-sm"}`}
-            initial={prefersReducedMotion ? false : { opacity: 0 }}
-            animate={prefersReducedMotion ? false : { opacity: 1 }}
-            exit={prefersReducedMotion ? false : { opacity: 0 }}
+            className={`${isMobile ? 'absolute' : 'fixed'} inset-0 bg-black/70 z-50 grid place-items-center px-4`}
+            initial={motionOK ? { opacity: 0 } : false}
+            animate={motionOK ? { opacity: 1 } : false}
+            exit={motionOK ? { opacity: 0 } : false}
           >
-            <motion.div
-              className="relative bg-neutral-900 border border-white/10 rounded-2xl w-full max-w-[95vw] md:max-w-[90vw] max-h-[92vh] overflow-hidden shadow-xl flex flex-col"
-              initial={prefersReducedMotion ? false : { scale: 0.96, y: 12, opacity: 0 }}
-              animate={prefersReducedMotion ? false : { scale: 1, y: 0, opacity: 1 }}
-              exit={prefersReducedMotion ? false : { scale: 0.96, y: 12, opacity: 0 }}
-            >
+            <div className="relative bg-neutral-900 border border-white/10 rounded-2xl w-full max-w-[95vw] md:max-w-[90vw] max-h-[92vh] overflow-hidden shadow-xl flex flex-col">
               {/* Header */}
               <div className="flex items-center justify-between p-4 border-b border-white/10 shrink-0">
                 <div className="text-white font-medium pr-4 whitespace-normal break-words">{preview.name}</div>
                 <button
                   className="p-2 rounded-lg bg-white/10 hover:bg-white/20"
-                  onClick={() => setPreview(null)}
+                  onClick={closePreviewAll}
                   title="Close Preview (Esc)"
                 >
                   <X size={16} />
@@ -570,8 +668,8 @@ export default function AllSubjects() {
               </div>
 
               {/* Content */}
-              <div className="relative bg-neutral-950 p-3 grow">
-                {isImageFile(preview) && navigableImages.length > 1 && (
+              <div className="relative bg-neutral-950 p-3 grow overflow-auto">
+                {isImageFile(preview) && navigableImages.length > 1 && !imgError && (
                   <>
                     <button
                       onClick={() => navAny("prev")}
@@ -589,14 +687,28 @@ export default function AllSubjects() {
                     </button>
                   </>
                 )}
-                <iframe
-                  title={preview.name}
-                  src={`https://drive.google.com/file/d/${preview.id}/preview`}
-                  className="w-full h-[60vh] md:h-[60vh] rounded-lg border-0"
-                  allow="autoplay"
-                  allowFullScreen
-                  loading="lazy"
-                />
+
+                {isImageFile(preview) && !imgError ? (
+                  <img
+                    src={getImageMediaUrl(preview)}
+                    alt={preview.name}
+                    className="w-full h-[60vh] md:h-[60vh] object-contain rounded-lg"
+                    loading="lazy"
+                    decoding="async"
+                    fetchpriority="low"
+                    referrerPolicy="no-referrer"
+                    onError={() => setImgError(true)}
+                  />
+                ) : (
+                  <iframe
+                    title={preview?.name || 'Preview'}
+                    src={`https://drive.google.com/file/d/${preview.id}/preview`}
+                    className="w-full h-[60vh] md:h-[60vh] rounded-lg border-0"
+                    allow="autoplay"
+                    allowFullScreen
+                    loading="lazy"
+                  />
+                )}
               </div>
 
               {/* Footer */}
@@ -610,7 +722,7 @@ export default function AllSubjects() {
                   Download
                 </a>
               </div>
-            </motion.div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

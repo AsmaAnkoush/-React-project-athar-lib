@@ -101,34 +101,23 @@ export default function Hero() {
       <div className="fixed inset-0 z-[1] bg-transparent backdrop-blur-none" />
 
       <div className="relative z-10 w-full flex justify-center">
-        <div className="bg-black/30 sm:bg-gradient-to-br sm:from-neutral-800 sm:to-neutral-900 backdrop-blur-sm sm:backdrop-blur-lg text-white rounded-2xl shadow-2xl w-full max-w-[92%] sm:max-w-3xl px-4 sm:px-10 py-4 sm:py-14 space-y-5 sm:space-y-8 text-center border border-white/10">
-          <h1 className="text-4xl md:text-4xl font-extrabold leading-tight tracking-tight drop-shadow">
-<h1 className="relative text-5xl sm:text-5xl font-extrabold text-orange-400">
-  <span className="relative z-10">ElecLib</span>
-  <span className="absolute inset-0 z-0 text-orange-300 animate-glitch translate-x-[2px]">ElecLib</span>
-  <span className="absolute inset-0 z-0 text-rose-400 animate-glitch -translate-x-[2px]">ElecLib</span>
-</h1>
-
-          <span
-className="
-relative
-text-transparent bg-clip-text
-bg-gradient-to-r from-white via-white to-orange-200
-font-extrabold
-drop-shadow-[0_4px_14px_rgba(251,146,60,0.35)]
-after:content-[''] after:absolute after:inset-x-0 after:-bottom-1.5 after:h-[3px]
-after:bg-gradient-to-r after:from-orange-400/0 after:via-orange-400/70 after:to-orange-400/0
-after:rounded-full
-"
->
- مكتبة الهندسة الكهربائية
-</span>
+        {/* ✅ قللنا الـ padding والـ space-y بين العناصر */}
+        <div className="bg-black/30 sm:bg-gradient-to-br sm:from-neutral-800 sm:to-neutral-900 backdrop-blur-sm sm:backdrop-blur-lg text-white rounded-2xl shadow-2xl w-full max-w-[92%] sm:max-w-3xl px-4 sm:px-8 py-6 sm:py-10 space-y-4 sm:space-y-6 text-center border border-white/10">
+          <h1 className="relative text-4xl sm:text-5xl font-extrabold text-orange-400 mt-2">
+            <span className="relative z-10">ElecLib</span>
+            <span className="absolute inset-0 z-0 text-orange-300 animate-glitch translate-x-[2px]">ElecLib</span>
+            <span className="absolute inset-0 z-0 text-rose-400 animate-glitch -translate-x-[2px]">ElecLib</span>
           </h1>
 
-          <p className="text-base sm:text-xl text-slate-200/90 leading-relaxed">
+          <span className="relative text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-orange-200 font-extrabold drop-shadow-[0_4px_14px_rgba(251,146,60,0.35)]
+          after:content-[''] after:absolute after:inset-x-0 after:-bottom-1 after:h-[2px] after:bg-gradient-to-r after:from-orange-400/0 after:via-orange-400/70 after:to-orange-400/0 after:rounded-full">
+            مكتبة الهندسة الكهربائية
+          </span>
+
+          <p className="text-base sm:text-lg text-slate-200/90 leading-relaxed">
             مكتبة إلكترونية لطلاب الهندسة الكهربائية، تم إعدادها بواسطة طلاب وخريجي التخصص.
           </p>
-          <p className="text-base sm:text-xl text-slate-200/90 leading-relaxed">
+          <p className="text-base sm:text-lg text-slate-200/90 leading-relaxed">
             تضم فورمات، تلاخيص، محاضرات، وبروجكتات سابقة لمواد التخصص، مع العمل المستمر على إضافة باقي المواد تدريجيًا.
           </p>
 
@@ -142,7 +131,7 @@ after:rounded-full
             </Link>
           </div>
 
-          <div className="relative z-10 mt-10 sm:mt-12">
+          <div className="relative z-10 mt-6 sm:mt-8">
             <h2 className="text-base sm:text-lg font-bold text-white mb-3 sm:mb-4 text-center border-b border-white/10 pb-1 sm:pb-2 w-fit mx-auto">
               مجموعات الخير
             </h2>
@@ -160,8 +149,8 @@ after:rounded-full
             </div>
           </div>
 
-          <div className="mt-6 sm:mt-10">
-            <p className="relative mx-auto max-w-2xl text-center text-base sm:text-xl font-semibold leading-relaxed text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-orange-200 drop-shadow-[0_4px_14px_rgba(251,146,60,0.35)] after:content-[''] after:absolute after:inset-x-0 after:-bottom-2 after:h-[3px] after:bg-gradient-to-r after:from-orange-400/0 after:via-orange-400/70 after:to-orange-400/0 after:rounded-full">
+          <div className="mt-4 sm:mt-6">
+            <p className="relative mx-auto max-w-2xl text-center text-base sm:text-lg font-semibold leading-relaxed text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-orange-200 drop-shadow-[0_4px_14px_rgba(251,146,60,0.35)] after:content-[''] after:absolute after:inset-x-0 after:-bottom-2 after:h-[3px] after:bg-gradient-to-r after:from-orange-400/0 after:via-orange-400/70 after:to-orange-400/0 after:rounded-full">
               اللهم انفعنا بما علَّمتنا، وعلِّمنا ما ينفعنا، وزدنا علمًا.
             </p>
           </div>
@@ -176,8 +165,10 @@ after:rounded-full
             <button onClick={() => setShowModal(false)} className="absolute top-2 left-2 text-orange-500 hover:text-orange-600 text-xl font-bold" aria-label="إغلاق">
               ✖
             </button>
-            <h2 className="text-lg font-extrabold text-orange-600 mb-2">{groupInfo[activeGroup].title}</h2>
-            <p className="text-slate-700">{groupInfo[activeGroup].description}</p>
+            <h2 className="text-lg font-extrabold text-orange-600 mb-2 text-center">
+              {groupInfo[activeGroup].title}
+            </h2>
+            <p className="text-slate-700 text-center">{groupInfo[activeGroup].description}</p>
 
             <div className="flex flex-col items-center gap-3 mt-5">
               {activeGroup === "needs" && (
@@ -191,22 +182,20 @@ after:rounded-full
         </div>
       )}
 
-  {showPoster && (
-  <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
-    <div className="bg-neutral-900 rounded-xl shadow-2xl overflow-hidden relative w-full max-w-xs border border-white/10">
-      {/* زر الإغلاق على الشمال */}
-      <button
-        onClick={() => setShowPoster(false)}
-        className="absolute top-3 left-3 text-white text-2xl font-bold hover:text-red-500 z-10"
-        aria-label="إغلاق"
-      >
-        ✖
-      </button>
-      <img src="/poster.jpg" alt="البوست التعريفي" className="w-full h-auto object-cover" />
-    </div>
-  </div>
-)}
-
+      {showPoster && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
+          <div className="bg-neutral-900 rounded-xl shadow-2xl overflow-hidden relative w-full max-w-xs border border-white/10">
+            <button
+              onClick={() => setShowPoster(false)}
+              className="absolute top-3 left-3 text-white text-2xl font-bold hover:text-red-500 z-10"
+              aria-label="إغلاق"
+            >
+              ✖
+            </button>
+            <img src="/poster.jpg" alt="البوست التعريفي" className="w-full h-auto object-cover" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
