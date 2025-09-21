@@ -6,10 +6,19 @@ import {
   X, Zap, ChevronLeft, ChevronRight, Upload
 } from "lucide-react";
 
+/* =========================================================
+   Subjects page cloned to match Labs page behavior exactly
+   - Video background ALWAYS on (incl. iOS)
+   - Mobile/tablet: open non-images in Drive preview (new tab) to avoid jank
+   - Desktop: preview modal for all types
+   - Safe Back button on root (history.back with unlock)
+   - AbortController for Drive fetches (no leaks)
+   - Debounced search; tidy UI
+   ========================================================= */
+
 /* ===================== Feedback trigger helper ===================== */
 const LS_TRIGGER_KEY = "eleclib_feedback_trigger";
 const LS_COUNT_KEY   = "eleclib_feedback_open_count";
-
 function bumpFeedbackCounterAndTrigger() {
   try {
     if (localStorage.getItem(LS_TRIGGER_KEY) === "1") return;
@@ -22,25 +31,19 @@ function bumpFeedbackCounterAndTrigger() {
   } catch {}
 }
 
-/********************
- * CONFIG
- ********************/
-const ROOT_FOLDER_ID = "1iPnlPlC-LzXE_jTn7KIk3EFD02_9cVyD";
-const KAREEM_FACEBOOK_URL = "https://www.facebook.com/kareem.taha.7146";
+/* ===================== CONFIG (same keys/links style) ===================== */
 const API_KEY = "AIzaSyA_yt7VNybzoM2GNsqgl196TefA8uT33Qs";
+const SUBJECTS_ROOT_FOLDER_ID = "1iPnlPlC-LzXE_jTn7KIk3EFD02_9cVyD"; // <-- root of courses
 const FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdQ6L8wNp28GjRytOy06fmm6knEhDjny0TdLgHi-i1hMeA2tw/viewform";
+const KAREEM_FACEBOOK_URL = "https://www.facebook.com/kareem.taha.7146";
 
-/********************
- * iOS DETECTION (لتفعيل/تعطيل blur حسب الجهاز)
- ********************/
+/* ===================== iOS detection (blur off on iOS) ===================== */
 const isIOS =
   typeof navigator !== "undefined" &&
   ( /iP(ad|hone|od)/.test(navigator.platform) ||
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) );
 
-/********************
- * HELPERS
- ********************/
+/* ===================== Helpers (same as Labs) ===================== */
 const isFolder = (mime) => mime === "application/vnd.google-apps.folder";
 const isImageFile = (f) =>
   f?.mimeType?.startsWith("image/") || /\.(png|jpe?g|gif|webp|svg)$/i.test((f?.name || "").toLowerCase());
@@ -52,11 +55,11 @@ function fileTypeLabel(f) {
   return ext.toUpperCase();
 }
 
-/** رابط تنزيل موحّد لكل الأنواع (صور/مباشر/Docs) */
 function getUniversalDownloadLink(file) {
   if (!file) return null;
   if (file.mimeType?.startsWith("application/vnd.google-apps")) {
-    return `https://www.googleapis.com/drive/v3/files/${file.id}/export?mimeType=${encodeURIComponent("application/pdf")}&key=${API_KEY}`;
+    const exportMime = "application/pdf";
+    return `https://www.googleapis.com/drive/v3/files/${file.id}/export?mimeType=${encodeURIComponent(exportMime)}&key=${API_KEY}`;
   }
   if (file.webContentLink) return file.webContentLink;
   return `https://drive.google.com/uc?export=download&id=${file.id}`;
@@ -70,8 +73,10 @@ function pickIcon({ mime, isFolderFlag, name = "" }) {
   if (mime?.startsWith("audio/") || /\.(mp3|wav|m4a|flac)$/.test(n)) return { Icon: FileAudio2, tone: "bg-fuchsia-500/20 text-fuchsia-300" };
   if (mime?.startsWith("video/") || /\.(mp4|mov|webm|mkv)$/.test(n)) return { Icon: FileVideo2, tone: "bg-violet-500/20 text-violet-300" };
   if (/\.(zip|rar|7z|tar|gz)$/i.test(n)) return { Icon: FileArchive, tone: "bg-emerald-500/20 text-emerald-300" };
-  if (/\.(xlsx?|csv)$/i.test(n) || mime === "application/vnd.google-apps.spreadsheet") return { Icon: FileSpreadsheet, tone: "bg-lime-500/20 text-lime-300" };
-  if (/\.(pptx?)$/i.test(n) || mime === "application/vnd.google-apps.presentation") return { Icon: Presentation, tone: "bg-orange-500/20 text-orange-300" };
+  if (/\.(xlsx?|csv)$/i.test(n) || mime === "application/vnd.google-apps.spreadsheet")
+    return { Icon: FileSpreadsheet, tone: "bg-lime-500/20 text-lime-300" };
+  if (/\.(pptx?)$/i.test(n) || mime === "application/vnd.google-apps.presentation")
+    return { Icon: Presentation, tone: "bg-orange-500/20 text-orange-300" };
   if (/\.(js|ts|tsx|jsx|py|cpp|c|java|go|rb)$/i.test(n)) return { Icon: FileCode, tone: "bg-sky-500/20 text-sky-300" };
   if (mime === "application/vnd.google-apps.document") return { Icon: FileText, tone: "bg-cyan-500/20 text-cyan-300" };
   return { Icon: File, tone: "bg-slate-500/20 text-slate-300" };
@@ -91,109 +96,93 @@ function highlightMatch(text, query) {
   );
 }
 
-/* ========= SUBJECT NAME PARSER + CLEAN DISPLAY ========= */
-function parseSubjectFolderName(folderName) {
-  const raw = (folderName || "").trim();
-  if (!raw) return { code: raw, name: raw };
-
-  const firstSep = raw.search(/[_/]/);
-  if (firstSep > 0) {
-    return { code: raw.slice(0, firstSep).trim(), name: raw.slice(firstSep + 1).trim() };
-  }
-
-  const m = raw.match(/^\s*([A-Za-z]+[A-Za-z0-9-]*?\d{2,})(?:\s*[-–—:_|/]+\s*|\s+)(.+)$/);
-  if (m) return { code: m[1].trim(), name: m[2].trim() };
-
-  const dashAfterDigits = raw.match(/^(.+?\d+)\s*[-_]+(.*)$/);
-  if (dashAfterDigits) return { code: dashAfterDigits[1].trim(), name: dashAfterDigits[2].trim() };
-
-  const dashSplit = raw.split(/\s*[-–—]\s*/);
-  if (dashSplit.length >= 2) return { code: dashSplit[0].trim(), name: dashSplit.slice(1).join(" - ").trim() };
-
-  const otherSplit = raw.split(/\s+[:|]\s+/);
-  if (otherSplit.length >= 2) return { code: otherSplit[0].trim(), name: otherSplit.slice(1).join(" - ").trim() };
-
-  const tokens = raw.split(/\s+/);
-  if (tokens.length >= 2) return { code: tokens[0], name: tokens.slice(1).join(" ") };
-  return { code: raw, name: "" };
-}
-function cleanNameForDisplay(name) {
-  return (name || "").replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim();
+// نفس دالة تقسيم اسم اللاب (نستخدمها لتناسق مع صفحة اللابات)
+function parseLabFromFolderName(name) {
+  const rx = /^\s*([A-Za-z]{3,}\d{3,})\s*[-_/:\s]+\s*(.+)\s*$/;
+  const m = name?.match(rx);
+  if (m) return { code: m[1].toUpperCase(), name: m[2] };
+  return { code: name || "COURSE", name: "" };
 }
 
-/* ========= SIMPLE ROW SKELETON ========= */
-function RowSkeleton() {
-  return (
-    <div className="rounded-2xl p-4 border border-white/10 bg-neutral-900/60 flex items-center gap-4 animate-pulse">
-      <div className="w-12 h-12 rounded-2xl bg-white/10" />
-      <div className="flex-1">
-        <div className="h-4 w-2/5 bg-white/15 rounded mb-2" />
-        <div className="h-3 w-1/4 bg-white/10 rounded" />
-      </div>
-      <div className="h-8 w-24 bg-white/10 rounded" />
-    </div>
-  );
+// Debounce hook
+function useDebouncedValue(value, delay = 220) {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setV(value), delay);
+    return () => clearTimeout(id);
+  }, [value, delay]);
+  return v;
 }
 
-/********************
- * API HELPERS
- ********************/
-async function listChildren({ parentId, onlyFolders = false }) {
+/* ===================== Drive API ===================== */
+async function listChildren({ parentId, onlyFolders = false, signal }) {
   const base = "https://www.googleapis.com/drive/v3/files";
   const mimeFilter = onlyFolders ? " and mimeType='application/vnd.google-apps.folder'" : "";
   const q = encodeURIComponent(`'${parentId}' in parents and trashed=false${mimeFilter}`);
   const fields = encodeURIComponent("files(id,name,mimeType,modifiedTime,webViewLink,webContentLink)");
-  // تخفيف الحمل: 200 بدل 1000
-  const url = `${base}?q=${q}&key=${API_KEY}&fields=nextPageToken,${fields}&pageSize=200&orderBy=folder,name&supportsAllDrives=true&includeItemsFromAllDrives=true`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Drive HTTP ${res.status}`);
+  const url = `${base}?q=${q}&key=${API_KEY}&fields=nextPageToken,${fields}&pageSize=100&supportsAllDrives=true&includeItemsFromAllDrives=true`;
+  const res = await fetch(url, { signal });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Drive HTTP ${res.status} — ${text}`);
+  }
   const data = await res.json();
   return (data.files ?? []);
 }
 
+/* ===================== Component ===================== */
 export default function AllSubjects() {
   const prefersReducedMotion = useReducedMotion();
+  const isMobile = typeof window !== 'undefined' && window.matchMedia?.('(pointer:coarse)').matches;
 
+  // بحث وقائمة المواد
   const [search, setSearch] = useState("");
-  const [selectedSubject, setSelectedSubject] = useState(null);
-  const [pathStack, setPathStack] = useState([]);
-
+  const debouncedSearch = useDebouncedValue(search, 220);
   const [subjects, setSubjects] = useState([]);
+  const [subjectsLoading, setSubjectsLoading] = useState(false);
+  const [subjectsErr, setSubjectsErr] = useState("");
+
+  // التصفح داخل مادة
+  const [selectedSubject, setSelectedSubject] = useState(null); // { id, code, name }
+  const [pathStack, setPathStack] = useState([]); // [{id, name}]
   const [items, setItems] = useState([]);
 
+  // أخرى
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [preview, setPreview] = useState(null);
 
-  // نفس منطق صفحة اللابات: حفظ وضع التمرير والرجوع لنفس المكان
-  const previewPushedRef = useRef(false);
+  // History/scroll
   const scrollYRef = useRef(0);
-
-  // قفل زر الرجوع حتى لا “يعلق”
   const backBusyRef = useRef(false);
 
+  /* ===== جلب مجلدات المواد من الجذر ===== */
   useEffect(() => {
+    let controller = new AbortController();
     async function fetchSubjects() {
-      if (!ROOT_FOLDER_ID || ROOT_FOLDER_ID.startsWith("<")) return;
-      setErr("");
+      if (!SUBJECTS_ROOT_FOLDER_ID) {
+        setSubjectsErr("ضع معرف مجلد المواد SUBJECTS_ROOT_FOLDER_ID أولاً.");
+        return;
+      }
+      setSubjectsLoading(true); setSubjectsErr("");
       try {
-        const folders = await listChildren({ parentId: ROOT_FOLDER_ID, onlyFolders: true });
-        const mapped = folders.map(f => {
-          const { code, name } = parseSubjectFolderName(f.name);
-          return {
-            id: f.id,
-            code: (code || f.name).trim(),
-            name: cleanNameForDisplay(name || ""),
-            link: `https://drive.google.com/drive/folders/${f.id}`,
-          };
+        const folders = await listChildren({ parentId: SUBJECTS_ROOT_FOLDER_ID, onlyFolders: true, signal: controller.signal });
+        const mapped = folders.map((f) => {
+          const parsed = parseLabFromFolderName(f.name);
+          return { id: f.id, code: parsed.code, name: parsed.name, link: f.webViewLink };
         }).sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: "base" }));
         setSubjects(mapped);
       } catch (e) {
-        console.error(e);
-        setErr("Failed to load subjects from Google Drive. Make sure the root folder is public and the API key is valid.");
+        if (e.name !== 'AbortError') {
+          console.error("Subjects fetch failed:", e);
+          setSubjectsErr("فشل جلب المواد من Google Drive. تأكد من علنية المجلد وصلاحيات الـ API key.");
+        }
+      } finally {
+        if (!controller.signal.aborted) setSubjectsLoading(false);
       }
     }
     fetchSubjects();
+    return () => controller.abort();
   }, []);
 
   function resetAll() {
@@ -202,103 +191,60 @@ export default function AllSubjects() {
     setItems([]);
     setErr("");
     setPreview(null);
-    previewPushedRef.current = false;
   }
 
-  // Back/History (مطابق للّابات)
-  useEffect(() => {
-    const onPop = () => {
-      if (preview) {
-        setPreview(null);
-        previewPushedRef.current = false;
-        window.scrollTo(0, scrollYRef.current || 0);
-        return;
-      }
-      if (pathStack.length > 1) { setPathStack(p => p.slice(0, -1)); return; }
-      if (selectedSubject) { resetAll(); return; }
-    };
-    window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
-  }, [preview, pathStack.length, selectedSubject]);
-
-  /* ==== زر الرجوع داخل الواجهة (Fail-Safe لـ iOS) ==== */
+  /* ==== زر الرجوع داخل الواجهة (نفس اللابات) ==== */
   function backOneUI() {
     if (backBusyRef.current) return;
     backBusyRef.current = true;
 
-    // 1) إغلاق المعاينة إن كانت مفتوحة
     if (preview) {
       setPreview(null);
-      previewPushedRef.current = false;
       requestAnimationFrame(() => window.scrollTo(0, scrollYRef.current || 0));
       backBusyRef.current = false;
       return;
     }
 
-    // 2) التراجع مستوى داخل المجلدات
     if (pathStack.length > 1) {
       setPathStack((p) => p.slice(0, -1));
       backBusyRef.current = false;
       return;
     }
 
-    // 3) الرجوع من داخل مادة إلى صفحة جميع المواد
     if (selectedSubject) {
       resetAll();
       backBusyRef.current = false;
       return;
     }
 
-    // 4) على الصفحة الرئيسية: إذا ما في تاريخ نرجع له، فكّ القفل
-    if (window.history.length <= 1) {
-      backBusyRef.current = false;
-      return;
-    }
-
-    // خطة طوارئ لـ iOS
-    const emergencyUnlock = () => { backBusyRef.current = false; };
-    const onVisibility = () => {
-      if (document.visibilityState !== "visible") emergencyUnlock();
-    };
-    window.addEventListener("pagehide", emergencyUnlock, { once: true });
-    document.addEventListener("visibilitychange", onVisibility, { once: true });
-
     const onPopOnce = () => {
-      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener('popstate', onPopOnce);
       backBusyRef.current = false;
     };
-    window.addEventListener("popstate", onPopOnce, { once: true });
-
+    window.addEventListener('popstate', onPopOnce, { once: true });
     window.history.back();
-
-    // فكّ القفل إن ما صار popstate بسرعة (iOS/بطء)
     setTimeout(() => {
-      window.removeEventListener("popstate", onPopOnce);
-      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener('popstate', onPopOnce);
       if (backBusyRef.current) backBusyRef.current = false;
-    }, 200);
+    }, 400);
   }
 
-  const subjectsList = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return subjects;
-    return subjects.filter((s) => s.code.toLowerCase().includes(q) || s.name.toLowerCase().includes(q));
-  }, [search, subjects]);
-
+  /* ===== اختيار مادة ===== */
   function handleSelectSubject(subj) {
     if (!subj?.id) return;
     setSelectedSubject(subj);
-    setPathStack([{ id: subj.id, name: subj.name || subj.code }]);
-    window.history.pushState({ view: "subject", id: subj.id }, "");
+    setPathStack([{ id: subj.id, name: subj.name }]);
   }
 
+  /* ===== تحميل العناصر للمجلد الحالي ===== */
   useEffect(() => {
+    let controller = new AbortController();
     async function fetchFolder() {
       if (!pathStack.length) return;
       setLoading(true); setErr("");
       const currentId = pathStack[pathStack.length - 1].id;
       try {
-        const files = await listChildren({ parentId: currentId, onlyFolders: false });
+        const files = await listChildren({ parentId: currentId, onlyFolders: false, signal: controller.signal });
         const sorted = files.slice().sort((a, b) => {
           if (isFolder(a.mimeType) && !isFolder(b.mimeType)) return -1;
           if (!isFolder(a.mimeType) && isFolder(b.mimeType)) return 1;
@@ -306,36 +252,27 @@ export default function AllSubjects() {
         });
         setItems(sorted);
       } catch (e) {
-        console.error(e);
-        setErr("Failed to load from Google Drive. Check public permissions/API key.");
+        if (e.name !== 'AbortError') {
+          console.error("Folder fetch failed:", e);
+          setErr("فشل تحميل محتويات المجلد من Google Drive. تحقق من العلنية وصلاحيات المفتاح.");
+        }
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     }
     fetchFolder();
+    return () => controller.abort();
   }, [pathStack]);
 
   function openFolder(folder) {
     setPathStack((prev) => [...prev, { id: folder.id, name: folder.name }]);
-    window.history.pushState({ view: "folder", id: folder.id }, "");
-  }
-
-  function openFile(f) {
-    scrollYRef.current = window.scrollY || 0;
-    if (!previewPushedRef.current) {
-      window.history.pushState({ view: "preview", id: f.id }, "");
-      previewPushedRef.current = true;
-    }
-    setPreview(f);
-    bumpFeedbackCounterAndTrigger();
   }
 
   function goToLevel(index) {
     setPathStack((prev) => prev.slice(0, index + 1));
-    window.history.pushState({ view: "folder", level: index }, "");
   }
 
-  // معاينة + تنقل بالأسهم بين الصور فقط
+  /* ===== Preview (مطابق) ===== */
   const navigableImages = useMemo(
     () => items.filter((f) => !isFolder(f.mimeType) && isImageFile(f)),
     [items]
@@ -350,23 +287,26 @@ export default function AllSubjects() {
     setPreview(arr[next]);
   }, [preview, navigableImages]);
 
-  function closePreviewAll() {
-    setPreview(null);
-    previewPushedRef.current = false;
-    requestAnimationFrame(() => window.scrollTo(0, scrollYRef.current || 0));
+  function openPreview(f) {
+    scrollYRef.current = window.scrollY || 0;
+    // على الموبايل: افتح غير الصور في تبويب Drive preview لتفادي التحميل التلقائي
+    if (isMobile && !isImageFile(f)) {
+      const url = `https://drive.google.com/file/d/${f.id}/preview`;
+      window.open(url, '_blank');
+      return;
+    }
+    setPreview(f);
+    bumpFeedbackCounterAndTrigger();
   }
 
-  useEffect(() => {
-    if (!preview) return;
-    const onKeyDown = (e) => {
-      if (e.key === "Escape") { e.preventDefault(); closePreviewAll(); return; }
-      if (e.key === "ArrowLeft") { e.preventDefault(); navAny("prev"); }
-      if (e.key === "ArrowRight") { e.preventDefault(); navAny("next"); }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [preview, navAny]);
+  /* ===== نتائج البحث ===== */
+  const subjectsList = useMemo(() => {
+    const q = debouncedSearch.trim().toLowerCase();
+    if (!q) return subjects;
+    return subjects.filter((s) => s.code.toLowerCase().includes(q) || (s.name||"").toLowerCase().includes(q));
+  }, [debouncedSearch, subjects]);
 
+  /* ===================== UI ===================== */
   return (
     <div className="relative min-h-screen flex items-start justify-center px-4 py-10">
       {/* خلفية فيديو — تبقى متحركة */}
@@ -383,23 +323,15 @@ export default function AllSubjects() {
         <source src={process.env.PUBLIC_URL + "/videos/elec-bg.mp4"} type="video/mp4" />
       </video>
 
-      {/* طبقة خفيفة فوق الفيديو: blur على غير iOS، وبدونه على iOS */}
+      {/* طبقة فوق الفيديو */}
       <div className={`fixed inset-0 z-[1] ${isIOS ? "bg-black/70" : "bg-black/60 backdrop-blur-sm"}`} />
 
       <main className="relative z-10 w-full max-w-6xl text-white">
-        <h2
-          className="
-            text-4xl md:text-5xl font-extrabold tracking-tight leading-tight
-            bg-gradient-to-r from-orange-400 via-orange-500 to-amber-300
-            text-transparent bg-clip-text
-            drop-shadow-[0_6px_20px_rgba(251,146,60,0.35)]
-            text-center mb-8
-          "
-        >
+        <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight leading-tight bg-gradient-to-r from-orange-400 via-orange-500 to-amber-300 text-transparent bg-clip-text drop-shadow-[0_6px_20px_rgba(251,146,60,0.35)] text-center mb-8">
           Electrical Engineering Courses
         </h2>
 
-        {/* Back مطابق للّابات */}
+        {/* زر Back على الرئيسية */}
         {!selectedSubject && (
           <div className="mb-4 flex justify-start">
             <button
@@ -415,6 +347,7 @@ export default function AllSubjects() {
           </div>
         )}
 
+        {/* البحث */}
         {!selectedSubject && (
           <div className="mb-6 flex justify-center">
             <input
@@ -427,76 +360,52 @@ export default function AllSubjects() {
           </div>
         )}
 
+        {/* شبكة المواد */}
         {!selectedSubject && (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-            {!prefersReducedMotion ? (
-              <AnimatePresence>
-                {subjectsList.map((subj) => {
-                  const q = search.trim();
-                  return (
-                    <motion.button
-                      key={subj.id}
-                      onClick={() => handleSelectSubject(subj)}
-                      className="group text-left block w-full will-change-transform"
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -8 }}
-                      transition={{ duration: 0.2 }}
-                    >
-                      <div className="bg-gradient-to-br from-neutral-800 to-neutral-900 text-white rounded-2xl p-5 shadow-lg border border-white/10 transition-transform duration-200 group-hover:scale-[1.03] hover:border-orange-500 flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-orange-500/20 text-orange-300 grid place-items-center">
-                          <Zap size={18} />
-                        </div>
-                        <div className="min-w-0">
-                          <h4 className="font-bold text-orange-300 text-base mb-0.5">
-                            {highlightMatch(subj.code, q)}
-                          </h4>
-                          <p className="text-slate-200 text-sm truncate">
-                            {highlightMatch(subj.name || "", q)}
-                          </p>
-                        </div>
+            <AnimatePresence>
+              {subjectsLoading && <div className="col-span-full text-center text-slate-300 text-sm">Loading…</div>}
+              {!subjectsLoading && subjectsErr && (
+                <p className="text-center col-span-full text-rose-300 text-sm mt-4">{subjectsErr}</p>
+              )}
+              {!subjectsLoading && !subjectsErr && subjectsList.map((subj) => {
+                const q = debouncedSearch.trim();
+                return (
+                  <motion.button
+                    key={subj.id}
+                    onClick={() => handleSelectSubject(subj)}
+                    className="group text-left block w-full will-change-transform"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <div className="bg-gradient-to-br from-neutral-800 to-neutral-900 text-white rounded-2xl p-5 shadow-lg border border-white/10 transition-transform duration-200 group-hover:scale-[1.03] hover:border-orange-500 flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-orange-500/20 text-orange-300 grid place-items-center">
+                        <Zap size={18} />
                       </div>
-                    </motion.button>
-                  );
-                })}
-                {subjectsList.length === 0 && subjects.length > 0 && (
-                  <p className="text-center col-span-full text-slate-400 text-sm mt-4">No subjects found.</p>
-                )}
-              </AnimatePresence>
-            ) : (
-              <>
-                {subjectsList.map((subj) => {
-                  const q = search.trim();
-                  return (
-                    <button
-                      key={subj.id}
-                      onClick={() => handleSelectSubject(subj)}
-                      className="group text-left block w-full"
-                    >
-                      <div className="bg-gradient-to-br from-neutral-800 to-neutral-900 text-white rounded-2xl p-5 shadow-lg border border-white/10 transition hover:border-orange-500 flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-orange-500/20 text-orange-300 grid place-items-center">
-                          <Zap size={18} />
-                        </div>
-                        <div className="min-w-0">
-                          <h4 className="font-bold text-orange-300 text-base mb-0.5">
-                            {highlightMatch(subj.code, q)}
-                          </h4>
+                      <div className="min-w-0">
+                        <h4 className="font-bold text-orange-300 text-base mb-0.5">
+                          {highlightMatch(subj.code, q)}
+                        </h4>
+                        {subj.name && (
                           <p className="text-slate-200 text-sm truncate">
-                            {highlightMatch(subj.name || "", q)}
+                            {highlightMatch(subj.name, q)}
                           </p>
-                        </div>
+                        )}
                       </div>
-                    </button>
-                  );
-                })}
-                {subjectsList.length === 0 && subjects.length > 0 && (
-                  <p className="text-center col-span-full text-slate-400 text-sm mt-4">No subjects found.</p>
-                )}
-              </>
-            )}
+                    </div>
+                  </motion.button>
+                );
+              })}
+              {!subjectsLoading && !subjectsErr && subjectsList.length === 0 && (
+                <p className="text-center col-span-full text-slate-400 text-sm mt-4">No courses found.</p>
+              )}
+            </AnimatePresence>
           </div>
         )}
 
+        {/* مستعرض المجلدات داخل المادة */}
         {selectedSubject && (
           <motion.div
             className="bg-white/5 rounded-2xl p-4 md:p-6 border border-white/10 shadow-xl mt-4"
@@ -504,6 +413,7 @@ export default function AllSubjects() {
             animate={prefersReducedMotion ? false : { opacity: 1, y: 0 }}
             transition={{ duration: 0.25 }}
           >
+            {/* زر Back */}
             <div className="mb-4">
               <button
                 onClick={backOneUI}
@@ -517,7 +427,7 @@ export default function AllSubjects() {
               </button>
             </div>
 
-            {/* عنوان المادة: code - name بسطر واحد */}
+            {/* عنوان المادة */}
             <div className="mb-2">
               <h3 className="text-2xl md:text-3xl font-extrabold tracking-tight flex flex-wrap items-baseline gap-2">
                 <span className="text-orange-400">{selectedSubject.code}</span>
@@ -543,91 +453,51 @@ export default function AllSubjects() {
             </div>
 
             {/* حالات التحميل/الخطأ */}
-            {loading && (
-              <div className="mt-6 space-y-3">
-                <RowSkeleton />
-                <RowSkeleton />
-                <RowSkeleton />
-                <RowSkeleton />
-              </div>
-            )}
+            {loading && <div className="text-center text-slate-300 text-sm mt-4">Loading…</div>}
             {err && <p className="text-red-300 text-sm mt-6">{err}</p>}
 
             {/* العناصر */}
             {!loading && !err && (
               <ul className="mt-5 space-y-3">
-                {!prefersReducedMotion ? (
-                  <AnimatePresence>
-                    {items.map((f) => {
-                      const { Icon, tone } = pickIcon({ mime: f.mimeType, isFolderFlag: isFolder(f.mimeType), name: f.name });
-                      const isDir = isFolder(f.mimeType);
-                      const onClick = () => {
-                        if (isDir) openFolder(f);
-                        else openFile(f);
-                      };
-                      return (
-                        <motion.li
-                          key={f.id}
-                          onClick={onClick}
-                          className="rounded-2xl bg-gradient-to-br from-neutral-900 to-neutral-950 border border-white/10 p-4 transition hover:border-orange-500 cursor-pointer will-change-transform"
-                          initial={{ opacity: 0, y: 6 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -6 }}
-                        >
-                          <div className="flex gap-4">
-                            <div className={`w-12 h-12 rounded-2xl grid place-items-center ${tone} shrink-0`}>
-                              <Icon size={22} />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h4 className="text-white text-sm md:text-base font-medium break-words whitespace-normal sm:truncate">
-                                {f.name}
-                              </h4>
-                              <div className="text-xs text-slate-400 mt-1">{fileTypeLabel(f)}</div>
-                            </div>
+                <AnimatePresence>
+                  {items.map((f) => {
+                    const { Icon, tone } = pickIcon({ mime: f.mimeType, isFolderFlag: isFolder(f.mimeType), name: f.name });
+                    const isDir = isFolder(f.mimeType);
+                    const onClick = () => {
+                      if (isDir) openFolder(f);
+                      else openPreview(f);
+                    };
+                    return (
+                      <motion.li
+                        key={f.id}
+                        onClick={onClick}
+                        className="rounded-2xl bg-gradient-to-br from-neutral-900 to-neutral-950 border border-white/10 p-4 transition hover:border-orange-500 cursor-pointer will-change-transform"
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -6 }}
+                      >
+                        <div className="flex gap-4">
+                          <div className={`w-12 h-12 rounded-2xl grid place-items-center ${tone} shrink-0`}>
+                            <Icon size={22} />
                           </div>
-                        </motion.li>
-                      );
-                    })}
-                    {items.length === 0 && <li className="text-slate-400 text-sm">No items here.</li>}
-                  </AnimatePresence>
-                ) : (
-                  <>
-                    {items.map((f) => {
-                      const { Icon, tone } = pickIcon({ mime: f.mimeType, isFolderFlag: isFolder(f.mimeType), name: f.name });
-                      const isDir = isFolder(f.mimeType);
-                      const onClick = () => {
-                        if (isDir) openFolder(f);
-                        else openFile(f);
-                      };
-                      return (
-                        <li
-                          key={f.id}
-                          onClick={onClick}
-                          className="rounded-2xl bg-gradient-to-br from-neutral-900 to-neutral-950 border border-white/10 p-4 transition hover:border-orange-500 cursor-pointer"
-                        >
-                          <div className="flex gap-4">
-                            <div className={`w-12 h-12 rounded-2xl grid place-items-center ${tone} shrink-0`}>
-                              <Icon size={22} />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h4 className="text-white text-sm md:text-base font-medium break-words whitespace-normal sm:truncate">
-                                {f.name}
-                              </h4>
-                              <div className="text-xs text-slate-400 mt-1">{fileTypeLabel(f)}</div>
-                            </div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-white text-sm md:text-base font-medium break-words whitespace-normal sm:truncate">
+                              {f.name}
+                            </h4>
+                            <div className="text-xs text-slate-400 mt-1">{fileTypeLabel(f)}</div>
                           </div>
-                        </li>
-                      );
-                    })}
-                    {items.length === 0 && <li className="text-slate-400 text-sm">No items here.</li>}
-                  </>
-                )}
+                        </div>
+                      </motion.li>
+                    );
+                  })}
+                  {items.length === 0 && <li className="text-slate-400 text-sm">No items here.</li>}
+                </AnimatePresence>
               </ul>
             )}
           </motion.div>
         )}
 
-        {/* Footer مطابق */}
+        {/* Footer */}
         <div className="mt-10 space-y-4">
           <div className="rounded-2xl border border-orange-500/30 bg-orange-600/10 p-4 text-center">
             <p className="text-sm sm:text-base text-orange-200 font-medium">
@@ -672,7 +542,7 @@ export default function AllSubjects() {
         </div>
       </main>
 
-      {/* Preview Modal مطابق للّابات (مع تحسين iOS) */}
+      {/* Preview Modal */}
       <AnimatePresence>
         {preview && (
           <motion.div
@@ -692,7 +562,7 @@ export default function AllSubjects() {
                 <div className="text-white font-medium pr-4 whitespace-normal break-words">{preview.name}</div>
                 <button
                   className="p-2 rounded-lg bg-white/10 hover:bg-white/20"
-                  onClick={closePreviewAll}
+                  onClick={() => setPreview(null)}
                   title="Close Preview (Esc)"
                 >
                   <X size={16} />

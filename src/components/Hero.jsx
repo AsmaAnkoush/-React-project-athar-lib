@@ -191,16 +191,22 @@ after:rounded-full
         </div>
       )}
 
-      {showPoster && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
-          <div className="bg-neutral-900 rounded-xl shadow-2xl overflow-hidden relative max-w-md w-full border border-white/10">
-            <button onClick={() => setShowPoster(false)} className="absolute top-2 left-2 text-white/80 text-xl font-bold hover:text-red-400" aria-label="إغلاق">
-              ✖
-            </button>
-            <img src="/poster.jpg" alt="البوست التعريفي" className="w-full h-auto object-cover" />
-          </div>
-        </div>
-      )}
+  {showPoster && (
+  <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
+    <div className="bg-neutral-900 rounded-xl shadow-2xl overflow-hidden relative w-full max-w-xs border border-white/10">
+      {/* زر الإغلاق على الشمال */}
+      <button
+        onClick={() => setShowPoster(false)}
+        className="absolute top-3 left-3 text-white text-2xl font-bold hover:text-red-500 z-10"
+        aria-label="إغلاق"
+      >
+        ✖
+      </button>
+      <img src="/poster.jpg" alt="البوست التعريفي" className="w-full h-auto object-cover" />
+    </div>
+  </div>
+)}
+
     </div>
   );
 }
