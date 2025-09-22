@@ -388,11 +388,15 @@ export default function AllSubjects() {
       <div className="fixed inset-0 z-[1] bg-black/30" />
 
       <main className="relative z-10 w-full max-w-6xl text-white py-10">
-        <h2
-          className="text-4xl md:text-5xl font-extrabold tracking-tight leading-tight bg-gradient-to-r from-orange-400 via-orange-500 to-amber-300 text-transparent bg-clip-text drop-shadow-[0_6px_20px_rgba(251,146,60,0.35)] text-center"
-        >
-          Electrical Engineering Courses
-        </h2>
+      <h2
+  className="text-4xl md:text-5xl font-extrabold tracking-wide leading-normal 
+             bg-gradient-to-r from-orange-400 via-orange-500 to-amber-300 
+             text-transparent bg-clip-text 
+             drop-shadow-[0_6px_20px_rgba(251,146,60,0.35)] text-center pb-1"
+>
+  Electrical Engineering Courses
+</h2>
+
 
         {/* زر رجوع على الصفحة الرئيسية للمواد */}
         {!selectedCourse && (
