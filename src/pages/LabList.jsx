@@ -662,7 +662,7 @@ export default function LabsPage() {
       <AnimatePresence>
         {preview && (
           <motion.div
-            className={`${isMobile ? 'absolute' : 'fixed'} inset-0 bg-black/70 z-50 grid place-items-center px-4`}
+className="fixed inset-0 bg-black/70 z-50 grid place-items-center px-4"
             initial={motionOK ? { opacity: 0 } : false}
             animate={motionOK ? { opacity: 1 } : false}
             exit={motionOK ? { opacity: 0 } : false}
