@@ -29,12 +29,12 @@ export default function FeedbackPrompt() {
 
   const verdict = useMemo(() => {
     switch (stars) {
-      case 1: return { img: asset("66.png"),   msg: "يا ساتر!  نجمة وحدة ؟" };
-      case 2: return { img: asset("33.png"),   msg: "يعني مش أسوأ شي , بس كيف نخليها 5 نجوم؟" };
-      case 3: return { img: asset("44.png"),   msg: "👌 شو ناقص المكتبة عشان يصير تقييمك 4 نجوم؟" };
+      case 1: return { img: asset("66.PNG"),   msg: "يا ساتر!  نجمة وحدة ؟" };
+      case 2: return { img: asset("33.PNG"),   msg: "يعني مش أسوأ شي , بس كيف نخليها 5 نجوم؟" };
+      case 3: return { img: asset("44.PNG"),   msg: "👌 شو ناقص المكتبة عشان يصير تقييمك 4 نجوم؟" };
       case 4: return { img: asset("22.PNG"),   msg: "😎 قربنا إنها تعجبك 5/5 " };
-      case 5: return { img: asset("5555.png"), msg: "حلووو إنها أعجبتك ❤️ شكراً كثيراً" };
-      default:return { img: asset("9.png"),    msg: "قيّم تجربتك للموقع معنا" };
+      case 5: return { img: asset("5555.PNG"), msg: "حلووو إنها أعجبتك ❤️ شكراً كثيراً" };
+      default:return { img: asset("9.PNG"),    msg: "قيّم تجربتك للموقع معنا" };
     }
   }, [stars]);
 
