@@ -60,6 +60,7 @@ export default function Hero() {
     setShowModal(true);
   };
 
+  // حظر أي أحداث مشبوهة للڤيديو بالخلفية
   useEffect(() => {
     const suspicious = [
       "eleclib:video:play","eleclib:video:pause","eleclib:video:toggle",
@@ -70,6 +71,28 @@ export default function Hero() {
     suspicious.forEach((evt) => window.addEventListener(evt, block, true));
     return () => suspicious.forEach((evt) => window.removeEventListener(evt, block, true));
   }, []);
+
+  // إغلاق بالمفتاح Esc + قفل سكرول الخلفية عند فتح أي مودال
+  useEffect(() => {
+    if (!showModal && !showPoster) return;
+
+    const onKeyDown = (e) => {
+      if (e.key === "Escape" || e.key === "Esc") {
+        e.preventDefault();
+        if (showPoster) setShowPoster(false);
+        else if (showModal) setShowModal(false);
+      }
+    };
+
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [showModal, showPoster]);
 
   const groupInfo = {
     needs: {
@@ -160,9 +183,17 @@ export default function Hero() {
       </div>
 
       {showModal && activeGroup && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 px-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 px-4"
+        >
           <div className="bg-orange-50 text-slate-900 rounded-xl shadow-xl p-6 pt-8 relative max-w-sm w-full border border-orange-200">
-            <button onClick={() => setShowModal(false)} className="absolute top-2 left-2 text-orange-500 hover:text-orange-600 text-xl font-bold" aria-label="إغلاق">
+            <button
+              onClick={() => setShowModal(false)}
+              className="absolute top-2 left-2 text-orange-500 hover:text-orange-600 text-xl font-bold"
+              aria-label="إغلاق"
+            >
               ✖
             </button>
             <h2 className="text-lg font-extrabold text-orange-600 mb-2 text-center">
@@ -172,18 +203,35 @@ export default function Hero() {
 
             <div className="flex flex-col items-center gap-3 mt-5">
               {activeGroup === "needs" && (
-                <button onClick={() => setShowPoster(true)} className="w-full bg-orange-100 hover:bg-orange-200 text-orange-800 px-3 py-2 rounded-full transition text-sm border border-orange-200">
+                <button
+                  onClick={() => setShowPoster(true)}
+                  className="w-full bg-orange-100 hover:bg-orange-200 text-orange-800 px-3 py-2 rounded-full transition text-sm border border-orange-200"
+                >
                   البوست التعريفي
                 </button>
               )}
-              <a href={groupInfo[activeGroup].link} target="_blank" rel="noopener noreferrer" className="w-full text-white px-3 py-2 rounded-full transition text-center text-sm" style={{ backgroundColor: "#fb923c" }} onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f97316")} onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#fb923c")}>{groupInfo[activeGroup].buttonText}</a>
+              <a
+                href={groupInfo[activeGroup].link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full text-white px-3 py-2 rounded-full transition text-center text-sm"
+                style={{ backgroundColor: "#fb923c" }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f97316")}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#fb923c")}
+              >
+                {groupInfo[activeGroup].buttonText}
+              </a>
             </div>
           </div>
         </div>
       )}
 
       {showPoster && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4"
+        >
           <div className="bg-neutral-900 rounded-xl shadow-2xl overflow-hidden relative w-full max-w-xs border border-white/10">
             <button
               onClick={() => setShowPoster(false)}
