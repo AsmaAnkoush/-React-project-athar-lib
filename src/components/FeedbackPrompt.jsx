@@ -7,6 +7,13 @@ const LS_TRIGGER_KEY = "eleclib_feedback_trigger";
 const SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbzN94t29s-wrWvREt03ZiNNU1tXb-XdjiaZoxos_nQccqEq1xiP0Ct0GpXPEb1gW2A9/exec";
 
+// ✅ دالة آمنة للمسارات (تدعم PUBLIC_URL أو BASE_URL)
+const BASE =
+  (typeof import.meta !== "undefined" && import.meta.env?.BASE_URL) ||
+  process.env.PUBLIC_URL ||
+  "";
+const asset = (name) => `${BASE}/feedback/${name}.png`;
+
 export default function FeedbackPrompt() {
   const [open, setOpen] = useState(false);
   const [stars, setStars] = useState(0);
@@ -25,19 +32,16 @@ export default function FeedbackPrompt() {
     return () => window.removeEventListener("eleclib:feedback", tryOpen);
   }, []);
 
- const asset = (name) => `/feedback/${name}.png`;
-
-const verdict = useMemo(() => {
-  switch (stars) {
-    case 1: return { img: asset("66"),   msg: "يا ساتر!  نجمة وحدة ؟" };
-    case 2: return { img: asset("33"),   msg: "يعني مش أسوأ شي , بس كيف نخليها 5 نجوم؟" };
-    case 3: return { img: asset("44"),   msg: "👌 شو ناقص المكتبة عشان يصير تقييمك 4 نجوم؟" };
-    case 4: return { img: asset("22"),   msg: "😎 قربنا إنها تعجبك 5/5 " };
-    case 5: return { img: asset("5555"), msg: "حلووو إنها أعجبتك ❤️ شكراً كثيراً" };
-    default:return { img: asset("9"),    msg: "قيّم تجربتك للموقع معنا" };
-  }
-}, [stars]);
-
+  const verdict = useMemo(() => {
+    switch (stars) {
+      case 1: return { img: asset("66"),   msg: "يا ساتر!  نجمة وحدة ؟" };
+      case 2: return { img: asset("33"),   msg: "يعني مش أسوأ شي , بس كيف نخليها 5 نجوم؟" };
+      case 3: return { img: asset("44"),   msg: "👌 شو ناقص المكتبة عشان يصير تقييمك 4 نجوم؟" };
+      case 4: return { img: asset("22"),   msg: "😎 قربنا إنها تعجبك 5/5 " };
+      case 5: return { img: asset("5555"), msg: "حلووو إنها أعجبتك ❤️ شكراً كثيراً" };
+      default:return { img: asset("9"),    msg: "قيّم تجربتك للموقع معنا" };
+    }
+  }, [stars]);
 
   function handleSubmit(e) {
     e?.preventDefault?.();
@@ -56,7 +60,7 @@ const verdict = useMemo(() => {
 
     // ✅ Optimistic UI
     localStorage.setItem(LS_DONE_KEY, "1");
-    setThanks(true); // عرض رسالة الشكر
+    setThanks(true);
 
     // اغلاق المودال بعد 1.5 ثانية
     setTimeout(() => setOpen(false), 1500);
@@ -103,7 +107,12 @@ const verdict = useMemo(() => {
             </div>
 
             <div className="flex flex-col items-center gap-2 mb-3">
-              <img src={verdict.img} alt="" className="w-24 h-24 object-contain" />
+              <img
+                src={verdict.img}
+                alt=""
+                className="w-24 h-24 object-contain"
+                onError={(e) => console.warn("⚠️ IMAGE NOT FOUND:", e.currentTarget.src)}
+              />
               <div className="text-sm text-slate-200">{verdict.msg}</div>
             </div>
 
