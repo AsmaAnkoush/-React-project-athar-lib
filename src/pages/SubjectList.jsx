@@ -7,11 +7,10 @@ import {
 } from "lucide-react";
 
 /* =========================================================
-   AllSubjects rewritten to match LabsPage behavior & UX
-   - Same interaction model (video bg always on, mobile optimizations)
-   - Mobile: non-images open in SAME TAB, images in modal
-   - Desktop: modal preview for all
-   - List paging, AbortController, image alt=media, history-safe Back
+   AllSubjects — Unified Back Behavior (System = UI)
+   - System Back (Android/iOS) behaves EXACTLY like the in-UI Back button.
+   - History: pushState on forward navigations; popstate -> backOneUI().
+   - Video bg always on, mobile optimizations, paging, alt=media images.
    ========================================================= */
 
 /* ===================== Feedback trigger helper ===================== */
@@ -38,7 +37,7 @@ const SUBJECTS_ROOT_FOLDER_ID = "1iPnlPlC-LzXE_jTn7KIk3EFD02_9cVyD"; // from you
 const FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdQ6L8wNp28GjRytOy06fmm6knEhDjny0TdLgHi-i1hMeA2tw/viewform";
 const KAREEM_FACEBOOK_URL = "https://www.facebook.com/kareem.taha.7146";
 
-/* ===================== Helpers (copied from LabsPage) ===================== */
+/* ===================== Helpers ===================== */
 const isFolder = (mime) => mime === "application/vnd.google-apps.folder";
 const isImageFile = (f) =>
   f?.mimeType?.startsWith("image/") || /\.(png|jpe?g|gif|webp|svg)$/i.test((f?.name || "").toLowerCase());
@@ -50,7 +49,6 @@ function fileTypeLabel(f) {
   return ext.toUpperCase();
 }
 
-/** روابط عرض/تنزيل موحّدة */
 function getUniversalDownloadLink(file) {
   if (!file) return null;
   if (file.mimeType?.startsWith("application/vnd.google-apps")) {
@@ -96,7 +94,6 @@ function highlightMatch(text, query) {
   );
 }
 
-// تقسيم اسم مجلد إلى code و name (نفس منطق اللابات)
 function parseEntryFromFolderName(name) {
   const rx = /^\s*([A-Za-z]{3,}\d{3,})\s*[-/_:\s]+\s*(.+)\s*$/;
   const m = name?.match(rx);
@@ -104,7 +101,6 @@ function parseEntryFromFolderName(name) {
   return { code: name || "COURSE", name: "" };
 }
 
-// Debounce hook
 function useDebouncedValue(value, delay = 220) {
   const [v, setV] = useState(value);
   useEffect(() => {
@@ -114,7 +110,6 @@ function useDebouncedValue(value, delay = 220) {
   return v;
 }
 
-/* API: إرجاع العناصر داخل مجلد */
 async function listChildren({ parentId, onlyFolders = false, signal }) {
   const base = "https://www.googleapis.com/drive/v3/files";
   const mimeFilter = onlyFolders ? " and mimeType='application/vnd.google-apps.folder'" : "";
@@ -156,12 +151,11 @@ export default function AllSubjects() {
 
   // History/scroll
   const scrollYRef = useRef(0);
-
-  // قفل النقرات السريعة على زر الرجوع في الواجهة
   const backBusyRef = useRef(false);
-
-  // منع الفتح المزدوج على الموبايل (double‑tap)
   const tapGuardRef = useRef(0);
+
+  // مرجع لأحدث نسخة من backOneUI داخل popstate
+  const backRef = useRef(() => {});
 
   /* ===== تحميل مجلدات المواد من مجلد الجذر ===== */
   useEffect(() => {
@@ -201,6 +195,24 @@ export default function AllSubjects() {
     setImgError(false);
   }
 
+  /* ====== توحيد سلوك Back: إعداد التاريخ + popstate ====== */
+  useEffect(() => {
+    // ثبّت جذر داخلي لو مافي state
+    if (!window.history.state) {
+      window.history.replaceState({ __eleclib: true, depth: 0 }, "");
+    }
+
+    const onPop = () => {
+      if (typeof backRef.current === 'function') backRef.current();
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  function pushStep() {
+    try { window.history.pushState({ __eleclib: true, t: Date.now() }, ""); } catch {}
+  }
+
   /* ==== زر الرجوع داخل الواجهة ==== */
   function backOneUI() {
     if (backBusyRef.current) return;
@@ -228,7 +240,7 @@ export default function AllSubjects() {
       return;
     }
 
-    // 4) على الصفحة الرئيسية: ارجع للي قبلها في المتصفح مباشرة وبأمان
+    // 4) على الصفحة الرئيسية: رجوع المتصفح الحقيقي
     const onPopOnce = () => {
       window.removeEventListener('popstate', onPopOnce);
       backBusyRef.current = false;
@@ -241,11 +253,15 @@ export default function AllSubjects() {
     }, 400);
   }
 
+  // حافظ على أحدث نسخة في المرجع
+  useEffect(() => { backRef.current = backOneUI; });
+
   /* ===== اختيار مادة ===== */
   function handleSelectCourse(course) {
     if (!course?.id) return;
     setSelectedCourse(course);
     setPathStack([{ id: course.id, name: course.name }]);
+    pushStep(); // خطوة للأمام
   }
 
   /* ===== تحميل العناصر للمجلد الحالي ===== */
@@ -277,11 +293,15 @@ export default function AllSubjects() {
   }, [pathStack]);
 
   function openFolder(folder) {
-    setPathStack((prev) => [...prev, { id: folder.id, name: folder.name }]);
+    const next = [...pathStack, { id: folder.id, name: folder.name }];
+    setPathStack(next);
+    pushStep(); // خطوة للأمام
   }
 
   function goToLevel(index) {
-    setPathStack((prev) => prev.slice(0, index + 1));
+    const next = pathStack.slice(0, index + 1);
+    setPathStack(next);
+    if (index >= pathStack.length - 1) pushStep();
   }
 
   /* ===== Preview ===== */
@@ -314,18 +334,17 @@ export default function AllSubjects() {
 
     setImgError(false);
     setPreview(f);
+    pushStep(); // أول Back يسكر المعاينة
     bumpFeedbackCounterAndTrigger();
   }
 
   function closePreviewAll() {
-    setPreview(null);
-    setImgError(false);
-    requestAnimationFrame(() => window.scrollTo(0, scrollYRef.current || 0));
+    // الزر الداخلي يستدعي Back النظام لتوحيد السلوك 100%
+    window.history.back();
   }
 
   useEffect(() => { setImgError(false); }, [preview?.id]);
 
-  // كيبورد
   useEffect(() => {
     if (!preview) return;
     const onKeyDown = (e) => {
@@ -344,12 +363,10 @@ export default function AllSubjects() {
     return subjects.filter((s) => s.code.toLowerCase().includes(q) || s.name.toLowerCase().includes(q));
   }, [debouncedSearch, subjects]);
 
-  // threshold to disable heavy motion
   const MANY = isMobile ? 40 : 60;
   const lotsOfSubjects = subjectsList.length > MANY;
   const lotsOfItems = items.length > MANY;
 
-  // Lightweight card component (same as LabsPage)
   const CardShell = ({ tone, Icon, title, subtitle }) => (
     <div className="bg-gradient-to-br from-neutral-800 to-neutral-900 text-white rounded-2xl p-5 border border-white/10 transition hover:border-orange-500 flex items-center gap-3" style={{ contain: 'content' }}>
       <div className={`w-10 h-10 rounded-xl ${tone} grid place-items-center`}>
@@ -362,7 +379,6 @@ export default function AllSubjects() {
     </div>
   );
 
-  // Paging
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 80;
   const pagedItems = useMemo(() => items.slice(0, page * PAGE_SIZE), [items, page]);
@@ -388,21 +404,20 @@ export default function AllSubjects() {
       <div className="fixed inset-0 z-[1] bg-black/30" />
 
       <main className="relative z-10 w-full max-w-6xl text-white py-10">
-      <h2
-  className="text-4xl md:text-5xl font-extrabold tracking-wide leading-normal 
-             bg-gradient-to-r from-orange-400 via-orange-500 to-amber-300 
-             text-transparent bg-clip-text 
-             drop-shadow-[0_6px_20px_rgba(251,146,60,0.35)] text-center pb-1"
->
-  Electrical Engineering Courses
-</h2>
-
+        <h2
+          className="text-4xl md:text-5xl font-extrabold tracking-wide leading-normal 
+                     bg-gradient-to-r from-orange-400 via-orange-500 to-amber-300 
+                     text-transparent bg-clip-text 
+                     drop-shadow-[0_6px_20px_rgba(251,146,60,0.35)] text-center pb-1"
+        >
+          Electrical Engineering Courses
+        </h2>
 
         {/* زر رجوع على الصفحة الرئيسية للمواد */}
         {!selectedCourse && (
           <div className="mb-4 flex justify-start">
             <button
-              onClick={backOneUI}
+              onClick={() => window.history.back()} // توحيد السلوك
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
               title="Back"
               disabled={!!preview || !!selectedCourse || pathStack.length > 1}
@@ -489,7 +504,7 @@ export default function AllSubjects() {
             {/* زر Back */}
             <div className="mb-4">
               <button
-                onClick={backOneUI}
+                onClick={() => window.history.back()} // توحيد السلوك
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Back"
                 disabled={loading}
@@ -653,7 +668,7 @@ export default function AllSubjects() {
       <AnimatePresence>
         {preview && (
           <motion.div
-className="fixed inset-0 bg-black/70 z-50 grid place-items-center px-4"
+            className="fixed inset-0 bg-black/70 z-50 grid place-items-center px-4"
             initial={motionOK ? { opacity: 0 } : false}
             animate={motionOK ? { opacity: 1 } : false}
             exit={motionOK ? { opacity: 0 } : false}

@@ -7,13 +7,35 @@ const LS_TRIGGER_KEY = "eleclib_feedback_trigger";
 const SCRIPT_URL =
   "https://script.google.com/macros/s/AKfycbzN94t29s-wrWvREt03ZiNNU1tXb-XdjiaZoxos_nQccqEq1xiP0Ct0GpXPEb1gW2A9/exec";
 
+/**
+ * ✅ نسخة محسّنة تمنع "تعليق" الصور عند تبديل التقييم:
+ *  - Preload لكل الصور عند الماونت.
+ *  - آلية swap سلسة: لا نغيّر الـ<IMG src> إلا بعد تحميل الصورة الجديدة فعليًا (onload).
+ *  - decoding="async" + loading="eager".
+ *  - تثبيت الأبعاد لتفادي القفز.
+ */
 export default function FeedbackPrompt() {
   const [open, setOpen] = useState(false);
   const [stars, setStars] = useState(0);
   const [note, setNote] = useState("");
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
-  const [thanks, setThanks] = useState(false); // ✅ حالة لرسالة الشكر
+  const [thanks, setThanks] = useState(false);
+
+  // المسار العام للصور من public/feedback
+  const asset = (name) => `${process.env.PUBLIC_URL || ""}/feedback/${name}`;
+
+  // جميع الصور المستخدمة
+  const IMAGE_NAMES = ["9.PNG", "22.PNG", "33.PNG", "44.PNG", "66.PNG", "5555.PNG"];
+
+  // ✅ Preload لكل الصور مرة واحدة
+  useEffect(() => {
+    IMAGE_NAMES.forEach((name) => {
+      const img = new Image();
+      img.decoding = "async"; // hint
+      img.src = asset(name);
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const tryOpen = () => {
@@ -25,8 +47,7 @@ export default function FeedbackPrompt() {
     return () => window.removeEventListener("eleclib:feedback", tryOpen);
   }, []);
 
-  const asset = (name) => `${process.env.PUBLIC_URL || ""}/feedback/${name}`;
-
+  // رسالة/صورة حسب التقييم
   const verdict = useMemo(() => {
     switch (stars) {
       case 1: return { img: asset("66.PNG"),   msg: "يا ساتر!  نجمة وحدة ؟" };
@@ -37,6 +58,34 @@ export default function FeedbackPrompt() {
       default:return { img: asset("9.PNG"),    msg: "قيّم تجربتك للموقع معنا" };
     }
   }, [stars]);
+
+  // ✅ آلية swap: نعرض صورة حالية، ونبدّلها فقط بعد تحميل الصورة الجديدة
+  const [imgSrc, setImgSrc] = useState(asset("9.PNG"));
+  const [imgLoaded, setImgLoaded] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const next = verdict.img;
+    setImgLoaded(false);
+
+    const loader = new Image();
+    loader.decoding = "async";
+    loader.onload = () => {
+      if (!cancelled) {
+        setImgSrc(next);
+        setImgLoaded(true);
+      }
+    };
+    loader.onerror = () => {
+      // لو فشل التحميل لأي سبب، نبقي على الصورة الحالية لتجنّب الوميض
+      if (!cancelled) setImgLoaded(true);
+    };
+    loader.src = next;
+
+    return () => {
+      cancelled = true;
+    };
+  }, [verdict.img]);
 
   function handleSubmit(e) {
     e?.preventDefault?.();
@@ -55,9 +104,9 @@ export default function FeedbackPrompt() {
 
     // ✅ Optimistic UI
     localStorage.setItem(LS_DONE_KEY, "1");
-    setThanks(true); // عرض رسالة الشكر
+    setThanks(true);
 
-    // اغلاق المودال بعد 1.5 ثانية
+    // إغلاق المودال بعد 1.5 ثانية
     setTimeout(() => setOpen(false), 1500);
 
     // إرسال في الخلفية
@@ -102,7 +151,17 @@ export default function FeedbackPrompt() {
             </div>
 
             <div className="flex flex-col items-center gap-2 mb-3">
-              <img src={verdict.img} alt="" className="w-24 h-24 object-contain" />
+              {/*
+                نستخدم src من حالة imgSrc (التي لا تتغيّر إلا بعد اكتمال تحميل الصورة الجديدة)
+                ونضيف انتقال شفاف ليكون التبديل ناعمًا
+              */}
+              <img
+                src={imgSrc}
+                alt=""
+                decoding="async"
+                loading="eager"
+                className={`w-24 h-24 object-contain transition-opacity duration-200 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
+              />
               <div className="text-sm text-slate-200">{verdict.msg}</div>
             </div>
 

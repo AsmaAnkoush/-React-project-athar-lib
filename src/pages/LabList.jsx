@@ -7,15 +7,16 @@ import {
 } from "lucide-react";
 
 /* =========================================================
-   Smooth + Video-on (mobile & desktop):
-   - Video background ALWAYS on (incl. iOS)
+   Smooth + Video-on (mobile & desktop) + Unified Back:
+   - System back (Android/iOS) يعمل نفس زر الواجهة تمامًا.
+   - نستخدم history.pushState على كل تنقّل للأمام، وpopstate يستدعي backOneUI().
    - Mobile/tablet: fewer animations
-   - Mobile: non‑images open in SAME TAB (no blank "Untitled"), images in modal
-   - Desktop: preview modal for all types (as before)
-   - Lists: paging to keep DOM small (no external virtualization needed)
+   - Mobile: non‑images open in SAME TAB, images in modal
+   - Desktop: preview modal for all types
+   - Lists: paging to keep DOM small
    - Drive requests: pageSize=100 + AbortController
    - Images via Drive alt=media with preview iframe fallback
-   - Root Back button: history.back() with safe unlock (no hang)
+   - Root Back button: history.back() (يوحِّد السلوك)
    ========================================================= */
 
 /* ===================== Feedback trigger helper ===================== */
@@ -167,6 +168,9 @@ export default function LabsPage() {
   // منع الفتح المزدوج على الموبايل (double‑tap)
   const tapGuardRef = useRef(0);
 
+  // 🔹 مرجع لاستدعاء أحدث نسخة من backOneUI داخل popstate
+  const backRef = useRef(() => {});
+
   /* ===== تحميل مجلدات اللابات من مجلد الجذر ===== */
   useEffect(() => {
     let controller = new AbortController();
@@ -205,7 +209,30 @@ export default function LabsPage() {
     setImgError(false);
   }
 
-  /* ==== زر الرجوع داخل الواجهة ==== */
+  /* ====== 🔸 توحيد سلوك Back: إعداد التاريخ + مستمع popstate ====== */
+  useEffect(() => {
+    // ثبّت جذر داخلي لو ما كان موجود
+    if (!window.history.state) {
+      window.history.replaceState({ __eleclib: true, depth: 0 }, "");
+    }
+
+    const onPop = () => {
+      // أي popstate => نفّذ بالضبط backOneUI الحالي
+      if (typeof backRef.current === 'function') backRef.current();
+    };
+
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  // وظيفة مساعدة: كل انتقال للأمام يضيف خطوة
+  function pushStep() {
+    try {
+      window.history.pushState({ __eleclib: true, t: Date.now() }, "");
+    } catch {}
+  }
+
+  /* ==== زر الرجوع داخل الواجهة (المنطق الفعلي) ==== */
   function backOneUI() {
     if (backBusyRef.current) return;
     backBusyRef.current = true;
@@ -246,11 +273,16 @@ export default function LabsPage() {
     }, 400);
   }
 
+  // دوّمًا خَلِّ المرجع يشير لأحدث نسخة
+  useEffect(() => { backRef.current = backOneUI; });
+
   /* ===== اختيار لاب ===== */
   function handleSelectLab(lab) {
     if (!lab?.id) return;
     setSelectedLab(lab);
-    setPathStack([{ id: lab.id, name: lab.name }]);
+    const nextPath = [{ id: lab.id, name: lab.name }];
+    setPathStack(nextPath);
+    pushStep(); // ← خطوة للأمام
   }
 
   /* ===== تحميل العناصر للمجلد الحالي ===== */
@@ -282,11 +314,17 @@ export default function LabsPage() {
   }, [pathStack]);
 
   function openFolder(folder) {
-    setPathStack((prev) => [...prev, { id: folder.id, name: folder.name }]);
+    const next = [...pathStack, { id: folder.id, name: folder.name }];
+    setPathStack(next);
+    pushStep(); // ← خطوة للأمام
   }
 
   function goToLevel(index) {
-    setPathStack((prev) => prev.slice(0, index + 1));
+    const next = pathStack.slice(0, index + 1);
+    setPathStack(next);
+    // إذا نزلت لنفس المستوى أو أعمق عبر النقر على breadcrumb، اعتبرها للأمام
+    if (index >= pathStack.length - 1) pushStep();
+    // لو كان ضغط للرجوع للأعلى عبر breadcrumb، ما ندفع خطوة (سلوك طبيعي أقرب لرجوع الواجهة)
   }
 
   /* ===== Preview ===== */
@@ -326,13 +364,13 @@ export default function LabsPage() {
     // على الديسكتوب (أو الصور على الموبايل): اعرض المودال
     setImgError(false);
     setPreview(f);
+    pushStep(); // ← خطوة للأمام (أول Back يسكر المعاينة)
     bumpFeedbackCounterAndTrigger();
   }
 
   function closePreviewAll() {
-    setPreview(null);
-    setImgError(false);
-    requestAnimationFrame(() => window.scrollTo(0, scrollYRef.current || 0));
+    // نخلي زر الواجهة يستخدم back النظام لضمان التطابق 100%
+    window.history.back();
   }
 
   // Reset image error when switching image
@@ -401,21 +439,20 @@ export default function LabsPage() {
       <div className="fixed inset-0 z-[1] bg-black/30" />
 
       <main className="relative z-10 w-full max-w-6xl text-white py-10">
-     <h2
-  className="text-4xl md:text-5xl font-extrabold tracking-wide leading-normal 
-             bg-gradient-to-r from-orange-400 via-orange-500 to-amber-300 
-             text-transparent bg-clip-text 
-             drop-shadow-[0_6px_20px_rgba(251,146,60,0.35)] text-center pb-1"
->
-  Electrical Engineering Labs
-</h2>
-
+        <h2
+          className="text-4xl md:text-5xl font-extrabold tracking-wide leading-normal 
+                     bg-gradient-to-r from-orange-400 via-orange-500 to-amber-300 
+                     text-transparent bg-clip-text 
+                     drop-shadow-[0_6px_20px_rgba(251,146,60,0.35)] text-center pb-1"
+        >
+          Electrical Engineering Labs
+        </h2>
 
         {/* زر رجوع على الصفحة الرئيسية للّابات */}
         {!selectedLab && (
           <div className="mb-4 flex justify-start">
             <button
-              onClick={backOneUI}
+              onClick={() => window.history.back()} // ← توحيد السلوك
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
               title="Back"
               disabled={!!preview || !!selectedLab || pathStack.length > 1}
@@ -502,7 +539,7 @@ export default function LabsPage() {
             {/* زر Back */}
             <div className="mb-4">
               <button
-                onClick={backOneUI}
+                onClick={() => window.history.back()} // ← توحيد السلوك
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Back"
                 disabled={loading}
@@ -603,7 +640,7 @@ export default function LabsPage() {
                       })}
                       {pagedItems.length < items.length && (
                         <li className="text-center">
-                          <button onClick={() => setPage(p => p + 1)} className="px-4 py-2 text-sm rounded-xl bg-white/10 hover:bg-white/20">Load more</button>
+                          <button onClick={() => setPage(p => p + 1)} className="px-4 py-2 text-sm rounded-xl bg-white/10 hover:bg白/20">Load more</button>
                         </li>
                       )}
                       {items.length === 0 && <li className="text-slate-400 text-sm">No items here.</li>}
@@ -666,7 +703,7 @@ export default function LabsPage() {
       <AnimatePresence>
         {preview && (
           <motion.div
-className="fixed inset-0 bg-black/70 z-50 grid place-items-center px-4"
+            className="fixed inset-0 bg-black/70 z-50 grid place-items-center px-4"
             initial={motionOK ? { opacity: 0 } : false}
             animate={motionOK ? { opacity: 1 } : false}
             exit={motionOK ? { opacity: 0 } : false}
