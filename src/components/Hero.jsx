@@ -132,10 +132,17 @@ export default function Hero() {
             <span className="absolute inset-0 z-0 text-rose-400 animate-glitch -translate-x-[2px]">ElecLib</span>
           </h1>
 
-          <span className="relative text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-orange-200 font-extrabold drop-shadow-[0_4px_14px_rgba(251,146,60,0.35)]
-          after:content-[''] after:absolute after:inset-x-0 after:-bottom-1 after:h-[2px] after:bg-gradient-to-r after:from-orange-400/0 after:via-orange-400/70 after:to-orange-400/0 after:rounded-full">
-            مكتبة الهندسة الكهربائية
-          </span>
+       <span
+  className="relative text-xl sm:text-2xl text-transparent bg-clip-text 
+             bg-gradient-to-r from-white via-white to-orange-200 
+             font-extrabold drop-shadow-[0_4px_14px_rgba(251,146,60,0.35)]
+             after:content-[''] after:absolute after:inset-x-0 after:-bottom-1 
+             after:h-[2px] after:bg-gradient-to-r after:from-orange-400/0 
+             after:via-orange-400/70 after:to-orange-400/0 after:rounded-full"
+>
+  مكتبة الهندسة الكهربائية
+</span>
+
 
           <p className="text-base sm:text-lg text-slate-200/90 leading-relaxed">
             مكتبة إلكترونية لطلاب الهندسة الكهربائية، تم إعدادها بواسطة طلاب وخريجي التخصص.
