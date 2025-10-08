@@ -7,11 +7,10 @@ import {
 } from "lucide-react";
 
 /* =========================================================
-   AllSubjects — Unified Back + Close-All Preview
-   - System Back يطابق زر الواجهة.
-   - فتح المعاينة: pushState مرة واحدة، والتنقّل replaceState (بدون تكديس).
-   - X / Esc: إغلاق فوري + history.go(-n) مع تجاهل popstate الناتجة.
-   - أسهم برتقالية ثابتة، والتنقّل على كل الملفات (غير المجلدات).
+   AllSubjects — Unified Back Behavior (System = UI)
+   - System Back (Android/iOS) behaves EXACTLY like the in-UI Back button.
+   - History: pushState on forward navigations; popstate -> backOneUI().
+   - Video bg always on, mobile optimizations, paging, alt=media images.
    ========================================================= */
 
 /* ===================== Feedback trigger helper ===================== */
@@ -33,7 +32,7 @@ function bumpFeedbackCounterAndTrigger() {
  * CONFIG (Subjects)
  ********************/
 const API_KEY = "AIzaSyA_yt7VNybzoM2GNsqgl196TefA8uT33Qs";
-const SUBJECTS_ROOT_FOLDER_ID = "1iPnlPlC-LzXE_jTn7KIk3EFD02_9cVyD";
+const SUBJECTS_ROOT_FOLDER_ID = "1iPnlPlC-LzXE_jTn7KIk3EFD02_9cVyD"; // from your original AllSubjects
 
 const FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdQ6L8wNp28GjRytOy06fmm6knEhDjny0TdLgHi-i1hMeA2tw/viewform";
 const KAREEM_FACEBOOK_URL = "https://www.facebook.com/kareem.taha.7146";
@@ -155,10 +154,6 @@ export default function AllSubjects() {
   const backBusyRef = useRef(false);
   const tapGuardRef = useRef(0);
 
-  // لإدارة تاريخ المعاينة وإغلاق close-all
-  const previewDepthRef = useRef(0); // أول فتح = 1
-  const ignorePopRef   = useRef(0);  // لتجاهل popstate الناتجة عن go(-n)
-
   // مرجع لأحدث نسخة من backOneUI داخل popstate
   const backRef = useRef(() => {});
 
@@ -198,20 +193,16 @@ export default function AllSubjects() {
     setErr("");
     setPreview(null);
     setImgError(false);
-    previewDepthRef.current = 0;
   }
 
-  /* ====== توحيد سلوك Back: state + popstate ====== */
+  /* ====== توحيد سلوك Back: إعداد التاريخ + popstate ====== */
   useEffect(() => {
+    // ثبّت جذر داخلي لو مافي state
     if (!window.history.state) {
       window.history.replaceState({ __eleclib: true, depth: 0 }, "");
     }
+
     const onPop = () => {
-      // تجاهل البوبستايت الناتجة عن close-all فقط
-      if (ignorePopRef.current > 0) {
-        ignorePopRef.current -= 1;
-        return;
-      }
       if (typeof backRef.current === 'function') backRef.current();
     };
     window.addEventListener("popstate", onPop);
@@ -227,10 +218,9 @@ export default function AllSubjects() {
     if (backBusyRef.current) return;
     backBusyRef.current = true;
 
-    // 1) إذا في معاينة → سكّرها مباشرة (بدون لمس التاريخ؛ البوبستايت صار)
+    // 1) إغلاق المعاينة إن كانت مفتوحة
     if (preview) {
       setPreview(null);
-      previewDepthRef.current = 0;
       requestAnimationFrame(() => window.scrollTo(0, scrollYRef.current || 0));
       backBusyRef.current = false;
       return;
@@ -314,11 +304,21 @@ export default function AllSubjects() {
     if (index >= pathStack.length - 1) pushStep();
   }
 
-  /* ===== Preview & Navigation (All non-folders) ===== */
+  /* ===== Preview ===== */
+  // ✅ تنقل بين كل الملفات غير المجلدات
   const navigableAll = useMemo(
     () => items.filter((f) => !isFolder(f.mimeType)),
     [items]
   );
+
+  const navAny = useCallback((dir) => {
+    if (!preview) return;
+    const arr = navigableAll;
+    const idx = arr.findIndex((x) => x.id === preview.id);
+    if (idx === -1 || arr.length === 0) return;
+    const next = dir === "prev" ? (idx - 1 + arr.length) % arr.length : (idx + 1) % arr.length;
+    setPreview(arr[next]);
+  }, [preview, navigableAll]);
 
   function openPreview(f) {
     scrollYRef.current = window.scrollY || 0;
@@ -327,70 +327,30 @@ export default function AllSubjects() {
     if (now - (tapGuardRef.current || 0) < 700) return;
     tapGuardRef.current = now;
 
+    if (isMobile && !isImageFile(f)) {
+      const url = `https://drive.google.com/file/d/${f.id}/preview`;
+      try { window.location.assign(url); } catch { window.location.href = url; }
+      return;
+    }
+
     setImgError(false);
-
-    const firstOpen = !preview; // أول معاينة؟
     setPreview(f);
-
-    // history: أول فتح pushState + عدّ عمق واحد، وبعدها replaceState فقط
-    try {
-      const state = { __eleclib: true, kind: "preview", t: Date.now() };
-      if (firstOpen) {
-        window.history.pushState(state, "");
-        previewDepthRef.current = 1;
-      } else {
-        window.history.replaceState(state, "");
-      }
-    } catch {}
-
+    pushStep(); // أول Back يسكر المعاينة
     bumpFeedbackCounterAndTrigger();
   }
 
-  const navAny = useCallback((dir) => {
-    if (!preview) return;
-    const arr = navigableAll;
-    if (!arr.length) return;
-    const idx = arr.findIndex((x) => x.id === preview.id);
-    if (idx === -1) return;
-    const next = dir === "prev" ? (idx - 1 + arr.length) % arr.length : (idx + 1) % arr.length;
-    setPreview(arr[next]); // التنقّل لا يغيّر عمق التاريخ
-    try {
-      window.history.replaceState({ __eleclib: true, kind: "preview", t: Date.now() }, "");
-    } catch {}
-  }, [preview, navigableAll]);
-
-  // إغلاق فوري يطوي كل حالات المعاينة في history دفعةً واحدة (X أو Esc)
-  function closePreviewHard() {
-    const n = Math.max(1, previewDepthRef.current || 1);
-
-    // سكّر المعاينة مباشرة
-    setPreview(null);
-    previewDepthRef.current = 0;
-
-    // تجاهل البوبستايت الناتجة عن go(-n) فقط، مع تصفير آمن
-    ignorePopRef.current = n;
-    const clearIgnore = () => {
-      ignorePopRef.current = 0;
-      window.removeEventListener("focus", clearIgnore);
-      document.removeEventListener("visibilitychange", clearIgnore);
-    };
-    setTimeout(clearIgnore, 500);
-    window.addEventListener("focus", clearIgnore);
-    document.addEventListener("visibilitychange", clearIgnore);
-
-    try { window.history.go(-n); } catch {}
-
-    requestAnimationFrame(() => window.scrollTo(0, scrollYRef.current || 0));
+  function closePreviewAll() {
+    // الزر الداخلي يستدعي Back النظام لتوحيد السلوك 100%
+    window.history.back();
   }
 
   useEffect(() => { setImgError(false); }, [preview?.id]);
 
-  // كيبورد: Esc = close-all + أسهم للتنقّل
   useEffect(() => {
     if (!preview) return;
     const onKeyDown = (e) => {
-      if (e.key === "Escape") { e.preventDefault(); closePreviewHard(); return; }
-      if (e.key === "ArrowLeft")  { e.preventDefault(); navAny("prev"); }
+      if (e.key === "Escape") { e.preventDefault(); closePreviewAll(); return; }
+      if (e.key === "ArrowLeft") { e.preventDefault(); navAny("prev"); }
       if (e.key === "ArrowRight") { e.preventDefault(); navAny("next"); }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -425,8 +385,6 @@ export default function AllSubjects() {
   const pagedItems = useMemo(() => items.slice(0, page * PAGE_SIZE), [items, page]);
   useEffect(() => { setPage(1); }, [items]);
 
-  const hasNav = navigableAll.length > 1;
-
   return (
     <div className="relative min-h-screen flex items-center justify-center px-4">
       {/* خلفية فيديو — مفعّلة على كل الأجهزة */}
@@ -460,7 +418,7 @@ export default function AllSubjects() {
         {!selectedCourse && (
           <div className="mb-4 flex justify-start">
             <button
-              onClick={() => window.history.back()} // توحيد السلوك مع System Back
+              onClick={() => window.history.back()} // توحيد السلوك
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
               title="Back"
               disabled={!!preview || !!selectedCourse || pathStack.length > 1}
@@ -707,72 +665,52 @@ export default function AllSubjects() {
         </div>
       </main>
 
-      {/* Preview Modal — overlay */}
+      {/* Preview Modal — mobile-safe overlay */}
       <AnimatePresence>
         {preview && (
           <motion.div
-            className="fixed inset-0 bg-black/80 z-50 grid place-items-center px-4"
+            className="fixed inset-0 bg-black/70 z-50 grid place-items-center px-4"
             initial={motionOK ? { opacity: 0 } : false}
             animate={motionOK ? { opacity: 1 } : false}
             exit={motionOK ? { opacity: 0 } : false}
           >
-            <div className="relative bg-neutral-900/90 border border-white/15 rounded-2xl w-full max-w-[95vw] md:max-w-[90vw] max-h-[92vh] overflow-hidden shadow-xl flex flex-col">
+            <div className="relative bg-neutral-900 border border-white/10 rounded-2xl w-full max-w-[95vw] md:max-w-[90vw] max-h-[92vh] overflow-hidden shadow-xl flex flex-col">
               {/* Header */}
               <div className="flex items-center justify-between p-4 border-b border-white/10 shrink-0">
                 <div className="text-white font-medium pr-4 whitespace-normal break-words">{preview.name}</div>
-                {/* زر إغلاق في الهيدر — Close-All */}
                 <button
-                  className="p-2 rounded-xl bg-white/15 hover:bg-white/25 ring-1 ring-white/60 backdrop-blur-sm drop-shadow-[0_4px_18px_rgba(0,0,0,0.7)]"
-                  onClick={closePreviewHard}
+                  className="p-2 rounded-xl bg-orange-600 hover:bg-orange-700 ring-1 ring-white/60 text-white"
+                  onClick={closePreviewAll}
                   title="Close Preview (Esc)"
                 >
-                  <X size={18} className="text-white" />
+                  <X size={18} />
                 </button>
               </div>
 
               {/* Content */}
               <div className="relative bg-neutral-950 p-3 grow overflow-auto">
-                {/* Scrims لتحسين تباين الأسهم */}
-                <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/40 to-transparent z-10" />
-                <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-20 bg-gradient-to-r from-black/35 to-transparent z-10" />
-                <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-20 bg-gradient-to-l from-black/35 to-transparent z-10" />
+                {/* أسهم تنقّل برتقالية — تُعرض فقط إذا في أكثر من ملف */}
+                {navigableAll.length > 1 && (
+                  <>
+                    <button
+                      onClick={() => navAny("prev")}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 p-3 rounded-2xl bg-orange-600 hover:bg-orange-700 ring-1 ring-white/60 z-10"
+                      aria-label="Previous"
+                      title="Previous (←)"
+                    >
+                      <ChevronLeft className="text-white" />
+                    </button>
+                    <button
+                      onClick={() => navAny("next")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-3 rounded-2xl bg-orange-600 hover:bg-orange-700 ring-1 ring-white/60 z-10"
+                      aria-label="Next"
+                      title="Next (→)"
+                    >
+                      <ChevronRight className="text-white" />
+                    </button>
+                  </>
+                )}
 
-                {/* أسهم تنقّل برتقالية — دائمة الظهور */}
-                <>
-                  <button
-                    onClick={() => hasNav && navAny("prev")}
-                    disabled={!hasNav}
-                    aria-disabled={!hasNav}
-                    className={`absolute left-3 top-1/2 -translate-y-1/2 z-20
-                                p-3 rounded-2xl
-                                bg-orange-600 hover:bg-orange-700
-                                ring-1 ring-white/60 backdrop-blur-sm
-                                drop-shadow-[0_8px_24px_rgba(0,0,0,0.65)]
-                                ${hasNav ? "opacity-100 cursor-pointer" : "opacity-40 cursor-not-allowed"}`}
-                    aria-label="Previous"
-                    title={hasNav ? "Previous (←)" : "No previous"}
-                  >
-                    <ChevronLeft size={22} className="text-white" />
-                  </button>
-
-                  <button
-                    onClick={() => hasNav && navAny("next")}
-                    disabled={!hasNav}
-                    aria-disabled={!hasNav}
-                    className={`absolute right-3 top-1/2 -translate-y-1/2 z-20
-                                p-3 rounded-2xl
-                                bg-orange-600 hover:bg-orange-700
-                                ring-1 ring-white/60 backdrop-blur-sm
-                                drop-shadow-[0_8px_24px_rgba(0,0,0,0.65)]
-                                ${hasNav ? "opacity-100 cursor-pointer" : "opacity-40 cursor-not-allowed"}`}
-                    aria-label="Next"
-                    title={hasNav ? "Next (→)" : "No next"}
-                  >
-                    <ChevronRight size={22} className="text-white" />
-                  </button>
-                </>
-
-                {/* المعاينة: صورة مباشرة، غير هيك iframe Google Drive */}
                 {isImageFile(preview) && !imgError ? (
                   <img
                     src={getImageMediaUrl(preview)}
