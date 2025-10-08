@@ -7,10 +7,11 @@ import {
 } from "lucide-react";
 
 /* =========================================================
-   AllSubjects — Unified Back + Single-Entry Preview History
+   AllSubjects — Unified Back + Close-All Preview
    - System Back يطابق زر الواجهة.
-   - فتح المعاينة: pushState مرة واحدة فقط، وتبديل الملف replaceState.
-   - إغلاق المعاينة: Back/×/Esc ترجع خطوة واحدة فقط.
+   - فتح المعاينة: pushState مرة واحدة، والتنقّل replaceState (بدون تكديس).
+   - X / Esc: إغلاق فوري + history.go(-n) مع تجاهل popstate الناتجة.
+   - أسهم برتقالية ثابتة، والتنقّل على كل الملفات (غير المجلدات).
    ========================================================= */
 
 /* ===================== Feedback trigger helper ===================== */
@@ -154,6 +155,10 @@ export default function AllSubjects() {
   const backBusyRef = useRef(false);
   const tapGuardRef = useRef(0);
 
+  // لإدارة تاريخ المعاينة وإغلاق close-all
+  const previewDepthRef = useRef(0); // أول فتح = 1
+  const ignorePopRef   = useRef(0);  // لتجاهل popstate الناتجة عن go(-n)
+
   // مرجع لأحدث نسخة من backOneUI داخل popstate
   const backRef = useRef(() => {});
 
@@ -193,6 +198,7 @@ export default function AllSubjects() {
     setErr("");
     setPreview(null);
     setImgError(false);
+    previewDepthRef.current = 0;
   }
 
   /* ====== توحيد سلوك Back: state + popstate ====== */
@@ -201,6 +207,11 @@ export default function AllSubjects() {
       window.history.replaceState({ __eleclib: true, depth: 0 }, "");
     }
     const onPop = () => {
+      // تجاهل البوبستايت الناتجة عن close-all فقط
+      if (ignorePopRef.current > 0) {
+        ignorePopRef.current -= 1;
+        return;
+      }
       if (typeof backRef.current === 'function') backRef.current();
     };
     window.addEventListener("popstate", onPop);
@@ -216,9 +227,10 @@ export default function AllSubjects() {
     if (backBusyRef.current) return;
     backBusyRef.current = true;
 
-    // 1) إذا في معاينة → سكّرها فقط
+    // 1) إذا في معاينة → سكّرها مباشرة (بدون لمس التاريخ؛ البوبستايت صار)
     if (preview) {
       setPreview(null);
+      previewDepthRef.current = 0;
       requestAnimationFrame(() => window.scrollTo(0, scrollYRef.current || 0));
       backBusyRef.current = false;
       return;
@@ -303,7 +315,6 @@ export default function AllSubjects() {
   }
 
   /* ===== Preview & Navigation (All non-folders) ===== */
-  // مجموعة التنقّل: كل الملفات غير المجلدات داخل المستوى الحالي
   const navigableAll = useMemo(
     () => items.filter((f) => !isFolder(f.mimeType)),
     [items]
@@ -321,11 +332,12 @@ export default function AllSubjects() {
     const firstOpen = !preview; // أول معاينة؟
     setPreview(f);
 
-    // history: أول فتح pushState، وبعدها replaceState فقط
+    // history: أول فتح pushState + عدّ عمق واحد، وبعدها replaceState فقط
     try {
       const state = { __eleclib: true, kind: "preview", t: Date.now() };
       if (firstOpen) {
         window.history.pushState(state, "");
+        previewDepthRef.current = 1;
       } else {
         window.history.replaceState(state, "");
       }
@@ -341,25 +353,43 @@ export default function AllSubjects() {
     const idx = arr.findIndex((x) => x.id === preview.id);
     if (idx === -1) return;
     const next = dir === "prev" ? (idx - 1 + arr.length) % arr.length : (idx + 1) % arr.length;
-    setPreview(arr[next]); // التنقّل لا يغيّر history
+    setPreview(arr[next]); // التنقّل لا يغيّر عمق التاريخ
     try {
-      // نحافظ على "نفس" مدخلة المعاينة (لا تكديس)
       window.history.replaceState({ __eleclib: true, kind: "preview", t: Date.now() }, "");
     } catch {}
   }, [preview, navigableAll]);
 
-  function closePreviewAll() {
-    // إغلاق المعاينة بخطوة واحدة (يطابق Back)
-    try { window.history.back(); } catch {}
+  // إغلاق فوري يطوي كل حالات المعاينة في history دفعةً واحدة (X أو Esc)
+  function closePreviewHard() {
+    const n = Math.max(1, previewDepthRef.current || 1);
+
+    // سكّر المعاينة مباشرة
+    setPreview(null);
+    previewDepthRef.current = 0;
+
+    // تجاهل البوبستايت الناتجة عن go(-n) فقط، مع تصفير آمن
+    ignorePopRef.current = n;
+    const clearIgnore = () => {
+      ignorePopRef.current = 0;
+      window.removeEventListener("focus", clearIgnore);
+      document.removeEventListener("visibilitychange", clearIgnore);
+    };
+    setTimeout(clearIgnore, 500);
+    window.addEventListener("focus", clearIgnore);
+    document.addEventListener("visibilitychange", clearIgnore);
+
+    try { window.history.go(-n); } catch {}
+
+    requestAnimationFrame(() => window.scrollTo(0, scrollYRef.current || 0));
   }
 
   useEffect(() => { setImgError(false); }, [preview?.id]);
 
-  // كيبورد: Esc يغلق + أسهم للتنقّل
+  // كيبورد: Esc = close-all + أسهم للتنقّل
   useEffect(() => {
     if (!preview) return;
     const onKeyDown = (e) => {
-      if (e.key === "Escape") { e.preventDefault(); closePreviewAll(); return; }
+      if (e.key === "Escape") { e.preventDefault(); closePreviewHard(); return; }
       if (e.key === "ArrowLeft")  { e.preventDefault(); navAny("prev"); }
       if (e.key === "ArrowRight") { e.preventDefault(); navAny("next"); }
     };
@@ -690,10 +720,10 @@ export default function AllSubjects() {
               {/* Header */}
               <div className="flex items-center justify-between p-4 border-b border-white/10 shrink-0">
                 <div className="text-white font-medium pr-4 whitespace-normal break-words">{preview.name}</div>
-                {/* زر إغلاق في الهيدر — خطوة واحدة فقط */}
+                {/* زر إغلاق في الهيدر — Close-All */}
                 <button
                   className="p-2 rounded-xl bg-white/15 hover:bg-white/25 ring-1 ring-white/60 backdrop-blur-sm drop-shadow-[0_4px_18px_rgba(0,0,0,0.7)]"
-                  onClick={closePreviewAll}
+                  onClick={closePreviewHard}
                   title="Close Preview (Esc)"
                 >
                   <X size={18} className="text-white" />
@@ -707,7 +737,7 @@ export default function AllSubjects() {
                 <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-20 bg-gradient-to-r from-black/35 to-transparent z-10" />
                 <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-20 bg-gradient-to-l from-black/35 to-transparent z-10" />
 
-                {/* أسهم تنقّل برتقالية — تظهر دائمًا، وتتوقف بصريًا لو ما في تنقّل */}
+                {/* أسهم تنقّل برتقالية — دائمة الظهور */}
                 <>
                   <button
                     onClick={() => hasNav && navAny("prev")}
