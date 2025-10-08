@@ -7,16 +7,10 @@ import {
 } from "lucide-react";
 
 /* =========================================================
-   Smooth + Video-on (mobile & desktop) + Unified Back:
-   - System back (Android/iOS) يعمل نفس زر الواجهة تمامًا.
-   - نستخدم history.pushState على كل تنقّل للأمام، وpopstate يستدعي backOneUI().
-   - Mobile/tablet: fewer animations
-   - Mobile: non-images open in SAME TAB, images in modal
-   - Desktop: preview modal for all types
-   - Lists: paging to keep DOM small
-   - Drive requests: pageSize=100 + AbortController
-   - Images via Drive alt=media with preview iframe fallback
-   - Root Back button: history.back() (يوحِّد السلوك)
+   AllSubjects — Unified Back Behavior (System = UI)
+   - System Back (Android/iOS) behaves EXACTLY like the in-UI Back button.
+   - History: pushState on forward navigations; popstate -> backOneUI().
+   - Video bg always on, mobile optimizations, paging, alt=media images.
    ========================================================= */
 
 /* ===================== Feedback trigger helper ===================== */
@@ -34,11 +28,12 @@ function bumpFeedbackCounterAndTrigger() {
   } catch {}
 }
 
-/* ===================== إعدادات Google Drive ===================== */
+/********************
+ * CONFIG (Subjects)
+ ********************/
 const API_KEY = "AIzaSyA_yt7VNybzoM2GNsqgl196TefA8uT33Qs";
-const LABS_ROOT_FOLDER_ID = "1c0xReeFi2sMXzhy-RibpObi10Qo3XG6K";
+const SUBJECTS_ROOT_FOLDER_ID = "1iPnlPlC-LzXE_jTn7KIk3EFD02_9cVyD"; // from your original AllSubjects
 
-// روابط اختيارية
 const FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdQ6L8wNp28GjRytOy06fmm6knEhDjny0TdLgHi-i1hMeA2tw/viewform";
 const KAREEM_FACEBOOK_URL = "https://www.facebook.com/kareem.taha.7146";
 
@@ -54,7 +49,6 @@ function fileTypeLabel(f) {
   return ext.toUpperCase();
 }
 
-/** روابط عرض/تنزيل موحّدة */
 function getUniversalDownloadLink(file) {
   if (!file) return null;
   if (file.mimeType?.startsWith("application/vnd.google-apps")) {
@@ -66,7 +60,6 @@ function getUniversalDownloadLink(file) {
 }
 
 function getImageMediaUrl(file) {
-  // عرض الصور مباشرة عبر Drive alt=media (يتطلب الملف عام Anyone with the link)
   return `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media&key=${API_KEY}`;
 }
 
@@ -101,15 +94,13 @@ function highlightMatch(text, query) {
   );
 }
 
-// تقسيم اسم مجلد اللاب إلى code و name
-function parseLabFromFolderName(name) {
+function parseEntryFromFolderName(name) {
   const rx = /^\s*([A-Za-z]{3,}\d{3,})\s*[-/_:\s]+\s*(.+)\s*$/;
   const m = name?.match(rx);
   if (m) return { code: m[1].toUpperCase(), name: m[2] };
-  return { code: name || "LAB", name: "" };
+  return { code: name || "COURSE", name: "" };
 }
 
-// Debounce hook
 function useDebouncedValue(value, delay = 220) {
   const [v, setV] = useState(value);
   useEffect(() => {
@@ -119,7 +110,6 @@ function useDebouncedValue(value, delay = 220) {
   return v;
 }
 
-/* API: إرجاع العناصر داخل مجلد */
 async function listChildren({ parentId, onlyFolders = false, signal }) {
   const base = "https://www.googleapis.com/drive/v3/files";
   const mimeFilter = onlyFolders ? " and mimeType='application/vnd.google-apps.folder'" : "";
@@ -136,20 +126,20 @@ async function listChildren({ parentId, onlyFolders = false, signal }) {
 }
 
 /* ===================== Component ===================== */
-export default function LabsPage() {
+export default function AllSubjects() {
   const prefersReducedMotion = useReducedMotion();
   const isMobile = typeof window !== 'undefined' && window.matchMedia?.('(pointer:coarse)').matches;
   const motionOK = !isMobile && !prefersReducedMotion;
 
-  // بحث وقائمة اللابات
+  // بحث وقائمة المواد
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 220);
-  const [labs, setLabs] = useState([]);
-  const [labsLoading, setLabsLoading] = useState(false);
-  const [labsErr, setLabsErr] = useState("");
+  const [subjects, setSubjects] = useState([]);
+  const [subjectsLoading, setSubjectsLoading] = useState(false);
+  const [subjectsErr, setSubjectsErr] = useState("");
 
-  // التصفح داخل لاب
-  const [selectedLab, setSelectedLab] = useState(null); // { id, code, name }
+  // التصفح داخل مادة
+  const [selectedCourse, setSelectedCourse] = useState(null); // { id, code, name }
   const [pathStack, setPathStack] = useState([]); // [{id, name}]
   const [items, setItems] = useState([]);
 
@@ -161,47 +151,43 @@ export default function LabsPage() {
 
   // History/scroll
   const scrollYRef = useRef(0);
-
-  // قفل النقرات السريعة على زر الرجوع في الواجهة
   const backBusyRef = useRef(false);
-
-  // منع الفتح المزدوج على الموبايل (double-tap)
   const tapGuardRef = useRef(0);
 
-  // 🔹 مرجع لاستدعاء أحدث نسخة من backOneUI داخل popstate
+  // مرجع لأحدث نسخة من backOneUI داخل popstate
   const backRef = useRef(() => {});
 
-  /* ===== تحميل مجلدات اللابات من مجلد الجذر ===== */
+  /* ===== تحميل مجلدات المواد من مجلد الجذر ===== */
   useEffect(() => {
     let controller = new AbortController();
-    async function fetchLabs() {
-      if (!LABS_ROOT_FOLDER_ID) {
-        setLabsErr("ضع معرف مجلد اللابات LABS_ROOT_FOLDER_ID أولاً.");
+    async function fetchSubjects() {
+      if (!SUBJECTS_ROOT_FOLDER_ID) {
+        setSubjectsErr("ضع معرف مجلد المواد SUBJECTS_ROOT_FOLDER_ID أولاً.");
         return;
       }
-      setLabsLoading(true); setLabsErr("");
+      setSubjectsLoading(true); setSubjectsErr("");
       try {
-        const folders = await listChildren({ parentId: LABS_ROOT_FOLDER_ID, onlyFolders: true, signal: controller.signal });
+        const folders = await listChildren({ parentId: SUBJECTS_ROOT_FOLDER_ID, onlyFolders: true, signal: controller.signal });
         const mapped = folders.map((f) => {
-          const parsed = parseLabFromFolderName(f.name);
+          const parsed = parseEntryFromFolderName(f.name);
           return { id: f.id, code: parsed.code, name: parsed.name, link: f.webViewLink };
         }).sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: "base" }));
-        setLabs(mapped);
+        setSubjects(mapped);
       } catch (e) {
         if (e.name !== 'AbortError') {
-          console.error("Labs fetch failed:", e);
-          setLabsErr("فشل جلب اللابات من Google Drive. تأكد من علنية المجلد وصلاحيات الـ API key.");
+          console.error("Subjects fetch failed:", e);
+          setSubjectsErr("فشل جلب المواد من Google Drive. تأكد من علنية المجلد وصلاحيات الـ API key.");
         }
       } finally {
-        if (!controller.signal.aborted) setLabsLoading(false);
+        if (!controller.signal.aborted) setSubjectsLoading(false);
       }
     }
-    fetchLabs();
+    fetchSubjects();
     return () => controller.abort();
   }, []);
 
   function resetAll() {
-    setSelectedLab(null);
+    setSelectedCourse(null);
     setPathStack([]);
     setItems([]);
     setErr("");
@@ -209,30 +195,25 @@ export default function LabsPage() {
     setImgError(false);
   }
 
-  /* ====== 🔸 توحيد سلوك Back: إعداد التاريخ + مستمع popstate ====== */
+  /* ====== توحيد سلوك Back: إعداد التاريخ + popstate ====== */
   useEffect(() => {
-    // ثبّت جذر داخلي لو ما كان موجود
+    // ثبّت جذر داخلي لو مافي state
     if (!window.history.state) {
       window.history.replaceState({ __eleclib: true, depth: 0 }, "");
     }
 
     const onPop = () => {
-      // أي popstate => نفّذ بالضبط backOneUI الحالي
       if (typeof backRef.current === 'function') backRef.current();
     };
-
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  // وظيفة مساعدة: كل انتقال للأمام يضيف خطوة
   function pushStep() {
-    try {
-      window.history.pushState({ __eleclib: true, t: Date.now() }, "");
-    } catch {}
+    try { window.history.pushState({ __eleclib: true, t: Date.now() }, ""); } catch {}
   }
 
-  /* ==== زر الرجوع داخل الواجهة (المنطق الفعلي) ==== */
+  /* ==== زر الرجوع داخل الواجهة ==== */
   function backOneUI() {
     if (backBusyRef.current) return;
     backBusyRef.current = true;
@@ -253,36 +234,34 @@ export default function LabsPage() {
     }
 
     // 3) الرجوع من داخل مادة إلى صفحة جميع المواد
-    if (selectedLab) {
+    if (selectedCourse) {
       resetAll();
       backBusyRef.current = false;
       return;
     }
 
-    // 4) على الصفحة الرئيسية: ارجع للي قبلها في المتصفح مباشرة وبأمان
+    // 4) على الصفحة الرئيسية: رجوع المتصفح الحقيقي
     const onPopOnce = () => {
       window.removeEventListener('popstate', onPopOnce);
       backBusyRef.current = false;
     };
     window.addEventListener('popstate', onPopOnce, { once: true });
     window.history.back();
-    // فكّ القفل لو ما وصلنا popstate (بعض بيئات iOS)
     setTimeout(() => {
       window.removeEventListener('popstate', onPopOnce);
       if (backBusyRef.current) backBusyRef.current = false;
     }, 400);
   }
 
-  // دوّمًا خَلِّ المرجع يشير لأحدث نسخة
+  // حافظ على أحدث نسخة في المرجع
   useEffect(() => { backRef.current = backOneUI; });
 
-  /* ===== اختيار لاب ===== */
-  function handleSelectLab(lab) {
-    if (!lab?.id) return;
-    setSelectedLab(lab);
-    const nextPath = [{ id: lab.id, name: lab.name }];
-    setPathStack(nextPath);
-    pushStep(); // ← خطوة للأمام
+  /* ===== اختيار مادة ===== */
+  function handleSelectCourse(course) {
+    if (!course?.id) return;
+    setSelectedCourse(course);
+    setPathStack([{ id: course.id, name: course.name }]);
+    pushStep(); // خطوة للأمام
   }
 
   /* ===== تحميل العناصر للمجلد الحالي ===== */
@@ -316,19 +295,17 @@ export default function LabsPage() {
   function openFolder(folder) {
     const next = [...pathStack, { id: folder.id, name: folder.name }];
     setPathStack(next);
-    pushStep(); // ← خطوة للأمام
+    pushStep(); // خطوة للأمام
   }
 
   function goToLevel(index) {
     const next = pathStack.slice(0, index + 1);
     setPathStack(next);
-    // إذا نزلت لنفس المستوى أو أعمق عبر النقر على breadcrumb، اعتبرها للأمام
     if (index >= pathStack.length - 1) pushStep();
-    // لو كان ضغط للرجوع للأعلى عبر breadcrumb، ما ندفع خطوة
   }
 
-  /* ===== Preview ===== */
-  // ⬅️ التنقّل يشمل كل الملفات غير المجلدات (PDF/Word/صور/فيديو…)
+  /* ===== Preview (عدّلنا هنا) ===== */
+  // ⬅️ تنقّل بين جميع الملفات غير المجلدات (PDF/Word/صور/فيديو…)
   const navigableAll = useMemo(
     () => items.filter((f) => !isFolder(f.mimeType)),
     [items]
@@ -341,68 +318,57 @@ export default function LabsPage() {
     const idx = arr.findIndex((x) => x.id === preview.id);
     if (idx === -1 || arr.length === 0) return;
     const next = dir === "prev" ? (idx - 1 + arr.length) % arr.length : (idx + 1) % arr.length;
-    setPreview(arr[next]);
+    setPreview(arr[next]); // لا يغيّر history
   }, [preview, navigableAll]);
 
   function openPreview(f) {
     scrollYRef.current = window.scrollY || 0;
 
-    // حارس لمسات سريعة حتى ما يفتح أكثر من تبويب على iOS
     const now = Date.now();
-    if (now - (tapGuardRef.current || 0) < 700) return; // تجاهل النقرات خلال 700ms
+    if (now - (tapGuardRef.current || 0) < 700) return;
     tapGuardRef.current = now;
 
-    // على الموبايل: افتح ملفات غير الصور في نفس التبويب
     if (isMobile && !isImageFile(f)) {
       const url = `https://drive.google.com/file/d/${f.id}/preview`;
-      try {
-        window.location.assign(url);
-      } catch {
-        window.location.href = url; // fallback
-      }
+      try { window.location.assign(url); } catch { window.location.href = url; }
       return;
     }
 
-    // على الديسكتوب (أو الصور على الموبايل): اعرض المودال
     setImgError(false);
     setPreview(f);
-    pushStep(); // ← خطوة للأمام (أول Back يسكر المعاينة)
+    pushStep(); // أول Back يسكر المعاينة
     bumpFeedbackCounterAndTrigger();
   }
 
   function closePreviewAll() {
-    // نخلي زر الواجهة يستخدم back النظام لضمان التطابق 100%
+    // الزر الداخلي يستدعي Back النظام لتوحيد السلوك 100%
     window.history.back();
   }
 
-  // Reset image error when switching image
   useEffect(() => { setImgError(false); }, [preview?.id]);
 
-  // كيبورد: Esc يغلق المعاينة + أسهم للتنقّل
   useEffect(() => {
     if (!preview) return;
     const onKeyDown = (e) => {
       if (e.key === "Escape") { e.preventDefault(); closePreviewAll(); return; }
-      if (e.key === "ArrowLeft") { e.preventDefault(); navAny("prev"); }
+      if (e.key === "ArrowLeft")  { e.preventDefault(); navAny("prev"); }
       if (e.key === "ArrowRight") { e.preventDefault(); navAny("next"); }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [preview, navAny]);
 
-  /* ===== نتائج البحث للابات ===== */
-  const labsList = useMemo(() => {
+  /* ===== نتائج البحث للمواد ===== */
+  const subjectsList = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
-    if (!q) return labs;
-    return labs.filter((l) => l.code.toLowerCase().includes(q) || l.name.toLowerCase().includes(q));
-  }, [debouncedSearch, labs]);
+    if (!q) return subjects;
+    return subjects.filter((s) => s.code.toLowerCase().includes(q) || s.name.toLowerCase().includes(q));
+  }, [debouncedSearch, subjects]);
 
-  // threshold to disable heavy motion (stricter on mobile)
   const MANY = isMobile ? 40 : 60;
-  const lotsOfLabs = labsList.length > MANY;
+  const lotsOfSubjects = subjectsList.length > MANY;
   const lotsOfItems = items.length > MANY;
 
-  // Lightweight card component
   const CardShell = ({ tone, Icon, title, subtitle }) => (
     <div className="bg-gradient-to-br from-neutral-800 to-neutral-900 text-white rounded-2xl p-5 border border-white/10 transition hover:border-orange-500 flex items-center gap-3" style={{ contain: 'content' }}>
       <div className={`w-10 h-10 rounded-xl ${tone} grid place-items-center`}>
@@ -415,7 +381,6 @@ export default function LabsPage() {
     </div>
   );
 
-  // Fallback paging to keep DOM small
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 80;
   const pagedItems = useMemo(() => items.slice(0, page * PAGE_SIZE), [items, page]);
@@ -447,17 +412,17 @@ export default function LabsPage() {
                      text-transparent bg-clip-text 
                      drop-shadow-[0_6px_20px_rgba(251,146,60,0.35)] text-center pb-1"
         >
-          Electrical Engineering Labs
+          Electrical Engineering Courses
         </h2>
 
-        {/* زر رجوع على الصفحة الرئيسية للّابات */}
-        {!selectedLab && (
+        {/* زر رجوع على الصفحة الرئيسية للمواد */}
+        {!selectedCourse && (
           <div className="mb-4 flex justify-start">
             <button
-              onClick={() => window.history.back()} // ← توحيد السلوك
+              onClick={() => window.history.back()} // توحيد السلوك
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
               title="Back"
-              disabled={!!preview || !!selectedLab || pathStack.length > 1}
+              disabled={!!preview || !!selectedCourse || pathStack.length > 1}
             >
               <ChevronLeft size={18} />
               Back
@@ -465,8 +430,8 @@ export default function LabsPage() {
           </div>
         )}
 
-        {/* الصفحة الرئيسية للابات */}
-        {!selectedLab && (
+        {/* الصفحة الرئيسية للمواد */}
+        {!selectedCourse && (
           <>
             {/* البحث */}
             <div className="mb-6 flex justify-center">
@@ -474,55 +439,55 @@ export default function LabsPage() {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by code or lab name…"
+                placeholder="Search by code or course name…"
                 className="w-full max-w-md px-5 py-3 rounded-full text-sm bg-white/10 placeholder-white/80 text-white border border-white/20 focus:outline-none focus:ring-2 focus:ring-orange-500"
               />
             </div>
 
-            {/* شبكة اللابات */}
+            {/* شبكة المواد */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-              {motionOK && !lotsOfLabs ? (
+              {motionOK && !lotsOfSubjects ? (
                 <AnimatePresence>
-                  {labsLoading && <div className="col-span-full text-center text-slate-300 text-sm">Loading labs…</div>}
-                  {!labsLoading && labsErr && (
-                    <p className="text-center col-span-full text-rose-300 text-sm mt-4">{labsErr}</p>
+                  {subjectsLoading && <div className="col-span-full text-center text-slate-300 text-sm">Loading courses…</div>}
+                  {!subjectsLoading && subjectsErr && (
+                    <p className="text-center col-span-full text-rose-300 text-sm mt-4">{subjectsErr}</p>
                   )}
-                  {!labsLoading && !labsErr && labsList.map((lab) => {
+                  {!subjectsLoading && !subjectsErr && subjectsList.map((course) => {
                     const q = debouncedSearch.trim();
                     return (
                       <motion.button
-                        key={lab.id}
-                        onClick={() => handleSelectLab(lab)}
+                        key={course.id}
+                        onClick={() => handleSelectCourse(course)}
                         className="group text-left block w-full"
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -8 }}
                         transition={{ duration: 0.18 }}
                       >
-                        <CardShell tone="bg-orange-500/20 text-orange-300" Icon={Zap} title={highlightMatch(lab.code, q)} subtitle={lab.name && highlightMatch(lab.name, q)} />
+                        <CardShell tone="bg-orange-500/20 text-orange-300" Icon={Zap} title={highlightMatch(course.code, q)} subtitle={course.name && highlightMatch(course.name, q)} />
                       </motion.button>
                     );
                   })}
-                  {!labsLoading && !labsErr && labsList.length === 0 && (
-                    <p className="text-center col-span-full text-slate-400 text-sm mt-4">No labs found.</p>
+                  {!subjectsLoading && !subjectsErr && subjectsList.length === 0 && (
+                    <p className="text-center col-span-full text-slate-400 text-sm mt-4">No courses found.</p>
                   )}
                 </AnimatePresence>
               ) : (
                 <>
-                  {labsLoading && <div className="col-span-full text-center text-slate-300 text-sm">Loading labs…</div>}
-                  {!labsLoading && labsErr && (
-                    <p className="text-center col-span-full text-rose-300 text-sm mt-4">{labsErr}</p>
+                  {subjectsLoading && <div className="col-span-full text-center text-slate-300 text-sm">Loading courses…</div>}
+                  {!subjectsLoading && subjectsErr && (
+                    <p className="text-center col-span-full text-rose-300 text-sm mt-4">{subjectsErr}</p>
                   )}
-                  {!labsLoading && !labsErr && labsList.map((lab) => {
+                  {!subjectsLoading && !subjectsErr && subjectsList.map((course) => {
                     const q = debouncedSearch.trim();
                     return (
-                      <button key={lab.id} onClick={() => handleSelectLab(lab)} className="group text-left block w-full">
-                        <CardShell tone="bg-orange-500/20 text-orange-300" Icon={Zap} title={highlightMatch(lab.code, q)} subtitle={lab.name && highlightMatch(lab.name, q)} />
+                      <button key={course.id} onClick={() => handleSelectCourse(course)} className="group text-left block w-full">
+                        <CardShell tone="bg-orange-500/20 text-orange-300" Icon={Zap} title={highlightMatch(course.code, q)} subtitle={course.name && highlightMatch(course.name, q)} />
                       </button>
                     );
                   })}
-                  {!labsLoading && !labsErr && labsList.length === 0 && (
-                    <p className="text-center col-span-full text-slate-400 text-sm mt-4">No labs found.</p>
+                  {!subjectsLoading && !subjectsErr && subjectsList.length === 0 && (
+                    <p className="text-center col-span-full text-slate-400 text-sm mt-4">No courses found.</p>
                   )}
                 </>
               )}
@@ -530,8 +495,8 @@ export default function LabsPage() {
           </>
         )}
 
-        {/* مستعرض المجلدات داخل اللاب */}
-        {selectedLab && (
+        {/* مستعرض المجلدات داخل المادة */}
+        {selectedCourse && (
           <motion.div
             className="bg-white/5 rounded-2xl p-4 md:p-6 border border-white/10 mt-4"
             initial={motionOK ? { opacity: 0, y: 8 } : false}
@@ -541,7 +506,7 @@ export default function LabsPage() {
             {/* زر Back */}
             <div className="mb-4">
               <button
-                onClick={() => window.history.back()} // ← توحيد السلوك
+                onClick={() => window.history.back()} // توحيد السلوك
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Back"
                 disabled={loading}
@@ -551,12 +516,12 @@ export default function LabsPage() {
               </button>
             </div>
 
-            {/* عنوان اللاب */}
+            {/* عنوان المادة */}
             <div className="mb-2">
               <h3 className="text-2xl md:text-3xl font-extrabold tracking-tight flex flex-wrap items-baseline gap-2">
-                <span className="text-orange-400">{selectedLab.code}</span>
-                {selectedLab.name && (
-                  <span className="text-white/90">- {selectedLab.name}</span>
+                <span className="text-orange-400">{selectedCourse.code}</span>
+                {selectedCourse.name && (
+                  <span className="text-white/90">- {selectedCourse.name}</span>
                 )}
               </h3>
             </div>
