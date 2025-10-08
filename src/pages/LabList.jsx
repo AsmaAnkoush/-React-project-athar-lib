@@ -7,16 +7,11 @@ import {
 } from "lucide-react";
 
 /* =========================================================
-   Smooth + Video-on (mobile & desktop) + Unified Back:
-   - System back (Android/iOS) يعمل نفس زر الواجهة تمامًا.
-   - نستخدم history.pushState على كل تنقّل للأمام، وpopstate يستدعي backOneUI().
-   - Mobile/tablet: fewer animations
-   - Mobile: non‑images open in SAME TAB, images in modal
-   - Desktop: preview modal for all types
-   - Lists: paging to keep DOM small
-   - Drive requests: pageSize=100 + AbortController
-   - Images via Drive alt=media with preview iframe fallback
-   - Root Back button: history.back() (يوحِّد السلوك)
+   Unified Back + Modal Preview (All Types) — Single-Entry History
+   - System back يطابق زر الواجهة.
+   - المعاينة: pushState عند أول فتح فقط، وreplaceState عند تبديل الملف.
+   - الإغلاق (×/Esc/Back): خطوة واحدة فقط.
+   - أسهم برتقالية ثابتة، والتنقّل على كل الملفات غير المجلدات.
    ========================================================= */
 
 /* ===================== Feedback trigger helper ===================== */
@@ -138,8 +133,7 @@ async function listChildren({ parentId, onlyFolders = false, signal }) {
 /* ===================== Component ===================== */
 export default function LabsPage() {
   const prefersReducedMotion = useReducedMotion();
-  const isMobile = typeof window !== 'undefined' && window.matchMedia?.('(pointer:coarse)').matches;
-  const motionOK = !isMobile && !prefersReducedMotion;
+  const motionOK = !prefersReducedMotion;
 
   // بحث وقائمة اللابات
   const [search, setSearch] = useState("");
@@ -162,10 +156,8 @@ export default function LabsPage() {
   // History/scroll
   const scrollYRef = useRef(0);
 
-  // قفل النقرات السريعة على زر الرجوع في الواجهة
+  // قفل النقرات السريعة
   const backBusyRef = useRef(false);
-
-  // منع الفتح المزدوج على الموبايل (double‑tap)
   const tapGuardRef = useRef(0);
 
   // 🔹 مرجع لاستدعاء أحدث نسخة من backOneUI داخل popstate
@@ -211,13 +203,11 @@ export default function LabsPage() {
 
   /* ====== 🔸 توحيد سلوك Back: إعداد التاريخ + مستمع popstate ====== */
   useEffect(() => {
-    // ثبّت جذر داخلي لو ما كان موجود
     if (!window.history.state) {
       window.history.replaceState({ __eleclib: true, depth: 0 }, "");
     }
 
     const onPop = () => {
-      // أي popstate => نفّذ بالضبط backOneUI الحالي
       if (typeof backRef.current === 'function') backRef.current();
     };
 
@@ -225,7 +215,6 @@ export default function LabsPage() {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  // وظيفة مساعدة: كل انتقال للأمام يضيف خطوة
   function pushStep() {
     try {
       window.history.pushState({ __eleclib: true, t: Date.now() }, "");
@@ -237,7 +226,7 @@ export default function LabsPage() {
     if (backBusyRef.current) return;
     backBusyRef.current = true;
 
-    // 1) إغلاق المعاينة إن كانت مفتوحة
+    // 1) إغلاق المعاينة إن كانت مفتوحة (خطوة واحدة)
     if (preview) {
       setPreview(null);
       requestAnimationFrame(() => window.scrollTo(0, scrollYRef.current || 0));
@@ -252,28 +241,26 @@ export default function LabsPage() {
       return;
     }
 
-    // 3) الرجوع من داخل مادة إلى صفحة جميع المواد
+    // 3) الرجوع من داخل لاب إلى صفحة جميع اللابات
     if (selectedLab) {
       resetAll();
       backBusyRef.current = false;
       return;
     }
 
-    // 4) على الصفحة الرئيسية: ارجع للي قبلها في المتصفح مباشرة وبأمان
+    // 4) على الصفحة الرئيسية: ارجع لما قبلها
     const onPopOnce = () => {
       window.removeEventListener('popstate', onPopOnce);
       backBusyRef.current = false;
     };
     window.addEventListener('popstate', onPopOnce, { once: true });
     window.history.back();
-    // فكّ القفل لو ما وصلنا popstate (بعض بيئات iOS)
     setTimeout(() => {
       window.removeEventListener('popstate', onPopOnce);
       if (backBusyRef.current) backBusyRef.current = false;
     }, 400);
   }
 
-  // دوّمًا خَلِّ المرجع يشير لأحدث نسخة
   useEffect(() => { backRef.current = backOneUI; });
 
   /* ===== اختيار لاب ===== */
@@ -282,7 +269,7 @@ export default function LabsPage() {
     setSelectedLab(lab);
     const nextPath = [{ id: lab.id, name: lab.name }];
     setPathStack(nextPath);
-    pushStep(); // ← خطوة للأمام
+    pushStep(); // خطوة للأمام
   }
 
   /* ===== تحميل العناصر للمجلد الحالي ===== */
@@ -316,72 +303,73 @@ export default function LabsPage() {
   function openFolder(folder) {
     const next = [...pathStack, { id: folder.id, name: folder.name }];
     setPathStack(next);
-    pushStep(); // ← خطوة للأمام
+    pushStep();
   }
 
   function goToLevel(index) {
     const next = pathStack.slice(0, index + 1);
     setPathStack(next);
-    // إذا نزلت لنفس المستوى أو أعمق عبر النقر على breadcrumb، اعتبرها للأمام
     if (index >= pathStack.length - 1) pushStep();
-    // لو كان ضغط للرجوع للأعلى عبر breadcrumb، ما ندفع خطوة (سلوك طبيعي أقرب لرجوع الواجهة)
   }
 
-  /* ===== Preview ===== */
-  const navigableImages = useMemo(
-    () => items.filter((f) => !isFolder(f.mimeType) && isImageFile(f)),
+  /* ===== Preview & Navigation (All non-folders) ===== */
+  const navigableAll = useMemo(
+    () => items.filter((f) => !isFolder(f.mimeType)),
     [items]
   );
-
-  const navAny = useCallback((dir) => {
-    if (!preview || !isImageFile(preview)) return;
-    const arr = navigableImages;
-    const idx = arr.findIndex((x) => x.id === preview.id);
-    if (idx === -1 || arr.length === 0) return;
-    const next = dir === "prev" ? (idx - 1 + arr.length) % arr.length : (idx + 1) % arr.length;
-    setPreview(arr[next]);
-  }, [preview, navigableImages]);
 
   function openPreview(f) {
     scrollYRef.current = window.scrollY || 0;
 
-    // حارس لمسات سريعة حتى ما يفتح أكثر من تبويب على iOS
     const now = Date.now();
-    if (now - (tapGuardRef.current || 0) < 700) return; // تجاهل النقرات خلال 700ms
+    if (now - (tapGuardRef.current || 0) < 700) return;
     tapGuardRef.current = now;
 
-    // على الموبايل: افتح ملفات غير الصور في نفس التبويب لتفادي تبويب "Untitled"
-    if (isMobile && !isImageFile(f)) {
-      const url = `https://drive.google.com/file/d/${f.id}/preview`;
-      try {
-        window.location.assign(url);
-      } catch {
-        window.location.href = url; // fallback
-      }
-      return;
-    }
-
-    // على الديسكتوب (أو الصور على الموبايل): اعرض المودال
     setImgError(false);
+
+    const firstOpen = !preview; // أول معاينة حالياً؟
     setPreview(f);
-    pushStep(); // ← خطوة للأمام (أول Back يسكر المعاينة)
+
+    // تاريخ: أول فتح pushState، وتبديل الملف replaceState (بدون تكديس)
+    try {
+      const state = { __eleclib: true, kind: "preview", t: Date.now() };
+      if (firstOpen) {
+        window.history.pushState(state, "");
+      } else {
+        window.history.replaceState(state, "");
+      }
+    } catch {}
+
     bumpFeedbackCounterAndTrigger();
   }
 
+  const navAny = useCallback((dir) => {
+    if (!preview) return;
+    const arr = navigableAll;
+    if (!arr.length) return;
+    const idx = arr.findIndex((x) => x.id === preview.id);
+    if (idx === -1) return;
+    const next = dir === "prev" ? (idx - 1 + arr.length) % arr.length : (idx + 1) % arr.length;
+    setPreview(arr[next]); // التنقّل لا يغيّر عمق التاريخ
+    try {
+      // نحافظ على نفس مدخلة المعاينة
+      window.history.replaceState({ __eleclib: true, kind: "preview", t: Date.now() }, "");
+    } catch {}
+  }, [preview, navigableAll]);
+
   function closePreviewAll() {
-    // نخلي زر الواجهة يستخدم back النظام لضمان التطابق 100%
-    window.history.back();
+    // إغلاق المعاينة بخطوة واحدة (يطابق Back)
+    try { window.history.back(); } catch {}
   }
 
-  // Reset image error when switching image
   useEffect(() => { setImgError(false); }, [preview?.id]);
 
-  // كيبورد: Esc يغلق المعاينة + أسهم للتنقّل بين الصور
+  // كيبورد: Esc يغلق + أسهم للتنقّل
   useEffect(() => {
     if (!preview) return;
     const onKeyDown = (e) => {
       if (e.key === "Escape") { e.preventDefault(); closePreviewAll(); return; }
-      if (e.key === "ArrowLeft") { e.preventDefault(); navAny("prev"); }
+      if (e.key === "ArrowLeft")  { e.preventDefault(); navAny("prev"); }
       if (e.key === "ArrowRight") { e.preventDefault(); navAny("next"); }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -395,8 +383,8 @@ export default function LabsPage() {
     return labs.filter((l) => l.code.toLowerCase().includes(q) || l.name.toLowerCase().includes(q));
   }, [debouncedSearch, labs]);
 
-  // threshold to disable heavy motion (stricter on mobile)
-  const MANY = isMobile ? 40 : 60;
+  // threshold to disable heavy motion
+  const MANY = 60;
   const lotsOfLabs = labsList.length > MANY;
   const lotsOfItems = items.length > MANY;
 
@@ -418,6 +406,9 @@ export default function LabsPage() {
   const PAGE_SIZE = 80;
   const pagedItems = useMemo(() => items.slice(0, page * PAGE_SIZE), [items, page]);
   useEffect(() => { setPage(1); }, [items]);
+
+  // Helpers for controls visibility
+  const hasNav = navigableAll.length > 1;
 
   return (
     <div className="relative min-h-screen flex items-center justify-center px-4">
@@ -448,11 +439,11 @@ export default function LabsPage() {
           Electrical Engineering Labs
         </h2>
 
-        {/* زر رجوع على الصفحة الرئيسية للّابات */}
+        {/* زر رجوع على الصفحة الرئيسية */}
         {!selectedLab && (
           <div className="mb-4 flex justify-start">
             <button
-              onClick={() => window.history.back()} // ← توحيد السلوك
+              onClick={() => window.history.back()}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
               title="Back"
               disabled={!!preview || !!selectedLab || pathStack.length > 1}
@@ -539,7 +530,7 @@ export default function LabsPage() {
             {/* زر Back */}
             <div className="mb-4">
               <button
-                onClick={() => window.history.back()} // ← توحيد السلوك
+                onClick={() => window.history.back()}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Back"
                 disabled={loading}
@@ -640,7 +631,7 @@ export default function LabsPage() {
                       })}
                       {pagedItems.length < items.length && (
                         <li className="text-center">
-                          <button onClick={() => setPage(p => p + 1)} className="px-4 py-2 text-sm rounded-xl bg-white/10 hover:bg白/20">Load more</button>
+                          <button onClick={() => setPage(p => p + 1)} className="px-4 py-2 text-sm rounded-xl bg-white/10 hover:bg-white/20">Load more</button>
                         </li>
                       )}
                       {items.length === 0 && <li className="text-slate-400 text-sm">No items here.</li>}
@@ -699,49 +690,72 @@ export default function LabsPage() {
         </div>
       </main>
 
-      {/* Preview Modal — mobile-safe overlay */}
+      {/* Preview Modal — overlay */}
       <AnimatePresence>
         {preview && (
           <motion.div
-            className="fixed inset-0 bg-black/70 z-50 grid place-items-center px-4"
+            className="fixed inset-0 bg-black/80 z-50 grid place-items-center px-4"
             initial={motionOK ? { opacity: 0 } : false}
             animate={motionOK ? { opacity: 1 } : false}
             exit={motionOK ? { opacity: 0 } : false}
           >
-            <div className="relative bg-neutral-900 border border-white/10 rounded-2xl w-full max-w-[95vw] md:max-w-[90vw] max-h-[92vh] overflow-hidden shadow-xl flex flex-col">
+            <div className="relative bg-neutral-900/90 border border-white/15 rounded-2xl w-full max-w-[95vw] md:max-w-[90vw] max-h-[92vh] overflow-hidden shadow-xl flex flex-col">
               {/* Header */}
               <div className="flex items-center justify-between p-4 border-b border-white/10 shrink-0">
                 <div className="text-white font-medium pr-4 whitespace-normal break-words">{preview.name}</div>
+                {/* زر إغلاق في الهيدر — خطوة واحدة */}
                 <button
-                  className="p-2 rounded-lg bg-white/10 hover:bg-white/20"
+                  className="p-2 rounded-xl bg-white/15 hover:bg-white/25 ring-1 ring-white/60 backdrop-blur-sm drop-shadow-[0_4px_18px_rgba(0,0,0,0.7)]"
                   onClick={closePreviewAll}
                   title="Close Preview (Esc)"
                 >
-                  <X size={16} />
+                  <X size={18} className="text-white" />
                 </button>
               </div>
 
               {/* Content */}
               <div className="relative bg-neutral-950 p-3 grow overflow-auto">
-                {isImageFile(preview) && navigableImages.length > 1 && !imgError && (
-                  <>
-                    <button
-                      onClick={() => navAny("prev")}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-xl bg-white/10 hover:bg-white/20 z-10"
-                      aria-label="Previous"
-                    >
-                      <ChevronLeft />
-                    </button>
-                    <button
-                      onClick={() => navAny("next")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-xl bg-white/10 hover:bg-white/20 z-10"
-                      aria-label="Next"
-                    >
-                      <ChevronRight />
-                    </button>
-                  </>
-                )}
+                {/* Scrims لتحسين التباين خلف الأسهم */}
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/40 to-transparent z-10" />
+                <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-20 bg-gradient-to-r from-black/35 to-transparent z-10" />
+                <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-20 bg-gradient-to-l from-black/35 to-transparent z-10" />
 
+                {/* أسهم التنقّل برتقالية — دائمة الظهور */}
+                <>
+                  <button
+                    onClick={() => hasNav && navAny("prev")}
+                    disabled={!hasNav}
+                    aria-disabled={!hasNav}
+                    className={`absolute left-3 top-1/2 -translate-y-1/2 z-20
+                                p-3 rounded-2xl
+                                bg-orange-600 hover:bg-orange-700
+                                ring-1 ring-white/60 backdrop-blur-sm
+                                drop-shadow-[0_8px_24px_rgba(0,0,0,0.65)]
+                                ${hasNav ? "opacity-100 cursor-pointer" : "opacity-40 cursor-not-allowed"}`}
+                    aria-label="Previous"
+                    title={hasNav ? "Previous (←)" : "No previous"}
+                  >
+                    <ChevronLeft size={22} className="text-white" />
+                  </button>
+
+                  <button
+                    onClick={() => hasNav && navAny("next")}
+                    disabled={!hasNav}
+                    aria-disabled={!hasNav}
+                    className={`absolute right-3 top-1/2 -translate-y-1/2 z-20
+                                p-3 rounded-2xl
+                                bg-orange-600 hover:bg-orange-700
+                                ring-1 ring-white/60 backdrop-blur-sm
+                                drop-shadow-[0_8px_24px_rgba(0,0,0,0.65)]
+                                ${hasNav ? "opacity-100 cursor-pointer" : "opacity-40 cursor-not-allowed"}`}
+                    aria-label="Next"
+                    title={hasNav ? "Next (→)" : "No next"}
+                  >
+                    <ChevronRight size={22} className="text-white" />
+                  </button>
+                </>
+
+                {/* محتوى المعاينة: صورة مباشرة، غير هيك iframe لعرض Google Drive */}
                 {isImageFile(preview) && !imgError ? (
                   <img
                     src={getImageMediaUrl(preview)}

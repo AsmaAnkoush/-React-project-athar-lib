@@ -7,10 +7,10 @@ import {
 } from "lucide-react";
 
 /* =========================================================
-   AllSubjects — Unified Back Behavior (System = UI)
-   - System Back (Android/iOS) behaves EXACTLY like the in-UI Back button.
-   - History: pushState on forward navigations; popstate -> backOneUI().
-   - Video bg always on, mobile optimizations, paging, alt=media images.
+   AllSubjects — Unified Back + Single-Entry Preview History
+   - System Back يطابق زر الواجهة.
+   - فتح المعاينة: pushState مرة واحدة فقط، وتبديل الملف replaceState.
+   - إغلاق المعاينة: Back/×/Esc ترجع خطوة واحدة فقط.
    ========================================================= */
 
 /* ===================== Feedback trigger helper ===================== */
@@ -32,7 +32,7 @@ function bumpFeedbackCounterAndTrigger() {
  * CONFIG (Subjects)
  ********************/
 const API_KEY = "AIzaSyA_yt7VNybzoM2GNsqgl196TefA8uT33Qs";
-const SUBJECTS_ROOT_FOLDER_ID = "1iPnlPlC-LzXE_jTn7KIk3EFD02_9cVyD"; // from your original AllSubjects
+const SUBJECTS_ROOT_FOLDER_ID = "1iPnlPlC-LzXE_jTn7KIk3EFD02_9cVyD";
 
 const FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdQ6L8wNp28GjRytOy06fmm6knEhDjny0TdLgHi-i1hMeA2tw/viewform";
 const KAREEM_FACEBOOK_URL = "https://www.facebook.com/kareem.taha.7146";
@@ -195,13 +195,11 @@ export default function AllSubjects() {
     setImgError(false);
   }
 
-  /* ====== توحيد سلوك Back: إعداد التاريخ + popstate ====== */
+  /* ====== توحيد سلوك Back: state + popstate ====== */
   useEffect(() => {
-    // ثبّت جذر داخلي لو مافي state
     if (!window.history.state) {
       window.history.replaceState({ __eleclib: true, depth: 0 }, "");
     }
-
     const onPop = () => {
       if (typeof backRef.current === 'function') backRef.current();
     };
@@ -218,7 +216,7 @@ export default function AllSubjects() {
     if (backBusyRef.current) return;
     backBusyRef.current = true;
 
-    // 1) إغلاق المعاينة إن كانت مفتوحة
+    // 1) إذا في معاينة → سكّرها فقط
     if (preview) {
       setPreview(null);
       requestAnimationFrame(() => window.scrollTo(0, scrollYRef.current || 0));
@@ -304,20 +302,12 @@ export default function AllSubjects() {
     if (index >= pathStack.length - 1) pushStep();
   }
 
-  /* ===== Preview ===== */
-  const navigableImages = useMemo(
-    () => items.filter((f) => !isFolder(f.mimeType) && isImageFile(f)),
+  /* ===== Preview & Navigation (All non-folders) ===== */
+  // مجموعة التنقّل: كل الملفات غير المجلدات داخل المستوى الحالي
+  const navigableAll = useMemo(
+    () => items.filter((f) => !isFolder(f.mimeType)),
     [items]
   );
-
-  const navAny = useCallback((dir) => {
-    if (!preview || !isImageFile(preview)) return;
-    const arr = navigableImages;
-    const idx = arr.findIndex((x) => x.id === preview.id);
-    if (idx === -1 || arr.length === 0) return;
-    const next = dir === "prev" ? (idx - 1 + arr.length) % arr.length : (idx + 1) % arr.length;
-    setPreview(arr[next]);
-  }, [preview, navigableImages]);
 
   function openPreview(f) {
     scrollYRef.current = window.scrollY || 0;
@@ -326,30 +316,51 @@ export default function AllSubjects() {
     if (now - (tapGuardRef.current || 0) < 700) return;
     tapGuardRef.current = now;
 
-    if (isMobile && !isImageFile(f)) {
-      const url = `https://drive.google.com/file/d/${f.id}/preview`;
-      try { window.location.assign(url); } catch { window.location.href = url; }
-      return;
-    }
-
     setImgError(false);
+
+    const firstOpen = !preview; // أول معاينة؟
     setPreview(f);
-    pushStep(); // أول Back يسكر المعاينة
+
+    // history: أول فتح pushState، وبعدها replaceState فقط
+    try {
+      const state = { __eleclib: true, kind: "preview", t: Date.now() };
+      if (firstOpen) {
+        window.history.pushState(state, "");
+      } else {
+        window.history.replaceState(state, "");
+      }
+    } catch {}
+
     bumpFeedbackCounterAndTrigger();
   }
 
+  const navAny = useCallback((dir) => {
+    if (!preview) return;
+    const arr = navigableAll;
+    if (!arr.length) return;
+    const idx = arr.findIndex((x) => x.id === preview.id);
+    if (idx === -1) return;
+    const next = dir === "prev" ? (idx - 1 + arr.length) % arr.length : (idx + 1) % arr.length;
+    setPreview(arr[next]); // التنقّل لا يغيّر history
+    try {
+      // نحافظ على "نفس" مدخلة المعاينة (لا تكديس)
+      window.history.replaceState({ __eleclib: true, kind: "preview", t: Date.now() }, "");
+    } catch {}
+  }, [preview, navigableAll]);
+
   function closePreviewAll() {
-    // الزر الداخلي يستدعي Back النظام لتوحيد السلوك 100%
-    window.history.back();
+    // إغلاق المعاينة بخطوة واحدة (يطابق Back)
+    try { window.history.back(); } catch {}
   }
 
   useEffect(() => { setImgError(false); }, [preview?.id]);
 
+  // كيبورد: Esc يغلق + أسهم للتنقّل
   useEffect(() => {
     if (!preview) return;
     const onKeyDown = (e) => {
       if (e.key === "Escape") { e.preventDefault(); closePreviewAll(); return; }
-      if (e.key === "ArrowLeft") { e.preventDefault(); navAny("prev"); }
+      if (e.key === "ArrowLeft")  { e.preventDefault(); navAny("prev"); }
       if (e.key === "ArrowRight") { e.preventDefault(); navAny("next"); }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -384,6 +395,8 @@ export default function AllSubjects() {
   const pagedItems = useMemo(() => items.slice(0, page * PAGE_SIZE), [items, page]);
   useEffect(() => { setPage(1); }, [items]);
 
+  const hasNav = navigableAll.length > 1;
+
   return (
     <div className="relative min-h-screen flex items-center justify-center px-4">
       {/* خلفية فيديو — مفعّلة على كل الأجهزة */}
@@ -417,7 +430,7 @@ export default function AllSubjects() {
         {!selectedCourse && (
           <div className="mb-4 flex justify-start">
             <button
-              onClick={() => window.history.back()} // توحيد السلوك
+              onClick={() => window.history.back()} // توحيد السلوك مع System Back
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
               title="Back"
               disabled={!!preview || !!selectedCourse || pathStack.length > 1}
@@ -664,49 +677,72 @@ export default function AllSubjects() {
         </div>
       </main>
 
-      {/* Preview Modal — mobile-safe overlay */}
+      {/* Preview Modal — overlay */}
       <AnimatePresence>
         {preview && (
           <motion.div
-            className="fixed inset-0 bg-black/70 z-50 grid place-items-center px-4"
+            className="fixed inset-0 bg-black/80 z-50 grid place-items-center px-4"
             initial={motionOK ? { opacity: 0 } : false}
             animate={motionOK ? { opacity: 1 } : false}
             exit={motionOK ? { opacity: 0 } : false}
           >
-            <div className="relative bg-neutral-900 border border-white/10 rounded-2xl w-full max-w-[95vw] md:max-w-[90vw] max-h-[92vh] overflow-hidden shadow-xl flex flex-col">
+            <div className="relative bg-neutral-900/90 border border-white/15 rounded-2xl w-full max-w-[95vw] md:max-w-[90vw] max-h-[92vh] overflow-hidden shadow-xl flex flex-col">
               {/* Header */}
               <div className="flex items-center justify-between p-4 border-b border-white/10 shrink-0">
                 <div className="text-white font-medium pr-4 whitespace-normal break-words">{preview.name}</div>
+                {/* زر إغلاق في الهيدر — خطوة واحدة فقط */}
                 <button
-                  className="p-2 rounded-lg bg-white/10 hover:bg-white/20"
+                  className="p-2 rounded-xl bg-white/15 hover:bg-white/25 ring-1 ring-white/60 backdrop-blur-sm drop-shadow-[0_4px_18px_rgba(0,0,0,0.7)]"
                   onClick={closePreviewAll}
                   title="Close Preview (Esc)"
                 >
-                  <X size={16} />
+                  <X size={18} className="text-white" />
                 </button>
               </div>
 
               {/* Content */}
               <div className="relative bg-neutral-950 p-3 grow overflow-auto">
-                {isImageFile(preview) && navigableImages.length > 1 && !imgError && (
-                  <>
-                    <button
-                      onClick={() => navAny("prev")}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-xl bg-white/10 hover:bg-white/20 z-10"
-                      aria-label="Previous"
-                    >
-                      <ChevronLeft />
-                    </button>
-                    <button
-                      onClick={() => navAny("next")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-xl bg-white/10 hover:bg-white/20 z-10"
-                      aria-label="Next"
-                    >
-                      <ChevronRight />
-                    </button>
-                  </>
-                )}
+                {/* Scrims لتحسين تباين الأسهم */}
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/40 to-transparent z-10" />
+                <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-20 bg-gradient-to-r from-black/35 to-transparent z-10" />
+                <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-20 bg-gradient-to-l from-black/35 to-transparent z-10" />
 
+                {/* أسهم تنقّل برتقالية — تظهر دائمًا، وتتوقف بصريًا لو ما في تنقّل */}
+                <>
+                  <button
+                    onClick={() => hasNav && navAny("prev")}
+                    disabled={!hasNav}
+                    aria-disabled={!hasNav}
+                    className={`absolute left-3 top-1/2 -translate-y-1/2 z-20
+                                p-3 rounded-2xl
+                                bg-orange-600 hover:bg-orange-700
+                                ring-1 ring-white/60 backdrop-blur-sm
+                                drop-shadow-[0_8px_24px_rgba(0,0,0,0.65)]
+                                ${hasNav ? "opacity-100 cursor-pointer" : "opacity-40 cursor-not-allowed"}`}
+                    aria-label="Previous"
+                    title={hasNav ? "Previous (←)" : "No previous"}
+                  >
+                    <ChevronLeft size={22} className="text-white" />
+                  </button>
+
+                  <button
+                    onClick={() => hasNav && navAny("next")}
+                    disabled={!hasNav}
+                    aria-disabled={!hasNav}
+                    className={`absolute right-3 top-1/2 -translate-y-1/2 z-20
+                                p-3 rounded-2xl
+                                bg-orange-600 hover:bg-orange-700
+                                ring-1 ring-white/60 backdrop-blur-sm
+                                drop-shadow-[0_8px_24px_rgba(0,0,0,0.65)]
+                                ${hasNav ? "opacity-100 cursor-pointer" : "opacity-40 cursor-not-allowed"}`}
+                    aria-label="Next"
+                    title={hasNav ? "Next (→)" : "No next"}
+                  >
+                    <ChevronRight size={22} className="text-white" />
+                  </button>
+                </>
+
+                {/* المعاينة: صورة مباشرة، غير هيك iframe Google Drive */}
                 {isImageFile(preview) && !imgError ? (
                   <img
                     src={getImageMediaUrl(preview)}
