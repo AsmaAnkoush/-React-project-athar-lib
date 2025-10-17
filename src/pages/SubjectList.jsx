@@ -5,6 +5,26 @@ import {
   FileArchive, FileSpreadsheet, FileAudio2, FileVideo2, Presentation,
   X, Zap, ChevronLeft, ChevronRight, Upload
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+
+export default function LabsPage() {
+  const navigate = useNavigate();
+
+  // بدل window.history.back()
+  const handleBack = () => {
+    const ref = document.referrer;
+    if (ref && new URL(ref).origin === window.location.origin) {
+      window.history.back();
+    } else {
+      navigate("/");
+    }
+  };
+
+  return (
+    <button onClick={handleBack}>رجوع</button>
+  );
+}
+
 
 /* =========================================================
    AllSubjects — Unified Back Behavior (System = UI)
