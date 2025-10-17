@@ -419,7 +419,14 @@ export default function AllSubjects() {
         {!selectedCourse && (
           <div className="mb-4 flex justify-start">
             <button
-              onClick={() => window.history.back()} // توحيد السلوك
+onClick={() => {
+  const ref = document.referrer;
+  if (ref && new URL(ref).origin === window.location.origin) {
+    window.history.back();
+  } else {
+    navigate("/");
+  }
+}}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
               title="Back"
               disabled={!!preview || !!selectedCourse || pathStack.length > 1}
