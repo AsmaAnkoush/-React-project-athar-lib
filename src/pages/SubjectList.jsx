@@ -516,11 +516,24 @@ onClick={() => {
             <div className="mb-4">
               <button
 onClick={() => {
+  // لو في فولدرات مفتوحة
+  if (pathStack.length > 1) {
+    setPathStack((prev) => prev.slice(0, -1));
+    return;
+  }
+
+  // لو داخل مادة
+  if (selectedCourse) {
+    resetAll();
+    return;
+  }
+
+  // لو في الصفحة الرئيسية للمواد → ارجع إلى الهيرو
   const ref = document.referrer;
   if (ref && new URL(ref).origin === window.location.origin) {
     window.history.back();
   } else {
-    navigate("/"); // ← يرجعك إلى صفحة الهيرو
+    navigate("/");
   }
 }}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
