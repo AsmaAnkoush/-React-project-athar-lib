@@ -7,23 +7,6 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-export default function LabsPage() {
-  const navigate = useNavigate();
-
-  // بدل window.history.back()
-  const handleBack = () => {
-    const ref = document.referrer;
-    if (ref && new URL(ref).origin === window.location.origin) {
-      window.history.back();
-    } else {
-      navigate("/");
-    }
-  };
-
-  return (
-    <button onClick={handleBack}>رجوع</button>
-  );
-}
 
 /* =========================================================
    Smooth + Video-on (mobile & desktop) + Unified Back:
@@ -156,6 +139,8 @@ async function listChildren({ parentId, onlyFolders = false, signal }) {
 
 /* ===================== Component ===================== */
 export default function LabsPage() {
+    const navigate = useNavigate();
+
   const prefersReducedMotion = useReducedMotion();
   const isMobile = typeof window !== 'undefined' && window.matchMedia?.('(pointer:coarse)').matches;
   const motionOK = !isMobile && !prefersReducedMotion;
@@ -476,7 +461,7 @@ onClick={() => {
   if (ref && new URL(ref).origin === window.location.origin) {
     window.history.back();
   } else {
-    navigate("/");
+    navigate("/");  // ← يرجعك إلى صفحة الهيرو
   }
 }}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
@@ -565,7 +550,14 @@ onClick={() => {
             {/* زر Back */}
             <div className="mb-4">
               <button
-                onClick={() => window.history.back()} // ← توحيد السلوك
+onClick={() => {
+  const ref = document.referrer;
+  if (ref && new URL(ref).origin === window.location.origin) {
+    window.history.back();
+  } else {
+    navigate("/");  // ← يرجعك إلى صفحة الهيرو
+  }
+}}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Back"
                 disabled={loading}
@@ -666,7 +658,8 @@ onClick={() => {
                       })}
                       {pagedItems.length < items.length && (
                         <li className="text-center">
-                          <button onClick={() => setPage(p => p + 1)} className="px-4 py-2 text-sm rounded-xl bg-white/10 hover:bg白/20">Load more</button>
+                          <button onClick={() => setPage(p => p + 1)} className="px-4 py-2 text-sm rounded-xl bg-white/10 hover:bg-white/20
+">Load more</button>
                         </li>
                       )}
                       {items.length === 0 && <li className="text-slate-400 text-sm">No items here.</li>}
