@@ -3,8 +3,11 @@ import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import {
   FolderOpen, File, FileText, FileCode, Image as ImageIcon,
   FileArchive, FileSpreadsheet, FileAudio2, FileVideo2, Presentation,
-  X, Zap, ChevronLeft, ChevronRight, Upload
+  X, Zap, ChevronLeft, ChevronRight, Upload, Home
 } from "lucide-react";
+
+import { Link } from "react-router-dom";
+
 
 /* =========================================================
    Unified Back + Modal Preview (All Types) — Close-All on X/Esc
@@ -377,6 +380,14 @@ function goToLevel(index) {
       <div className="fixed inset-0 z-[1] bg-black/30" />
 
       <main className="relative z-10 w-full max-w-6xl text-white py-10">
+        <Link
+  to="/"
+  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition"
+>
+  <Home size={18} />
+  Home
+</Link>
+
         <h2
           className="text-4xl md:text-5xl font-extrabold tracking-wide leading-normal 
                      bg-gradient-to-r from-orange-400 via-orange-500 to-amber-300 
@@ -505,7 +516,7 @@ function goToLevel(index) {
                     className={`hover:underline ${idx === pathStack.length - 1 ? "text-orange-300 font-medium" : "text-slate-300"}`}
                     onClick={() => goToLevel(idx)}
                   >
-                    {idx === 0 ? "Root" : p.name}
+                    {idx === 0 ? "Main Folder" : p.name}
                   </button>
                   {idx < pathStack.length - 1 && <span className="text-slate-500">/</span>}
                 </span>
