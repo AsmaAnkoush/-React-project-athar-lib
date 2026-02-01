@@ -1,24 +1,32 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import Hero from './components/Hero';
-import MaterialsPage from './pages/SubjectList';
-import LabsPage from './pages/LabList';
-import FeedbackPrompt from "./components/FeedbackPrompt";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import Hero from "./Hero";
+import FolderView from "./FolderView";
+import Links from "./Links";
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Hero />} />
+
+        {/* المجلد الإجباري */}
+       <Route
+  path="/mandatory"
+  element={<FolderView folderId="19QUGPeHP1QuMa8dTmeVkrLd7zVh4axvk" />}
+/>
+
+<Route
+  path="/others"
+  element={<FolderView folderId="1mAhIsfs1LkjQXK2kTyUauGj1hgns-m5a" />}
+/>
 
 
-function App() {
-    return (
-        <BrowserRouter>
-            <main className="bg-[#e0e7ff] min-h-screen text-gray-900">
-                <Routes>
-                    <Route path="/" element={<Hero />} />
-                    <Route path="/subjects" element={<MaterialsPage />} />
-                    <Route path="/labs" element={<LabsPage />} />
-                </Routes>
-            </main>
-                  <FeedbackPrompt />
+        {/* صفحة الروابط */}
+        <Route path="/links" element={<Links />} />
 
-        </BrowserRouter>
-    );
+        {/* فتح أي مجلد فرعي */}
+        <Route path="/folder/:id" element={<FolderView />} />
+      </Routes>
+    </BrowserRouter>
+  );
 }
-
-export default App;
