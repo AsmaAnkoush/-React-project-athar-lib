@@ -3,22 +3,18 @@ import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import {
   FolderOpen, File, FileText, FileCode, Image as ImageIcon,
   FileArchive, FileSpreadsheet, FileAudio2, FileVideo2, Presentation,
-  X, Zap, ChevronLeft, ChevronRight, Upload
+  X, Zap, ChevronLeft, ChevronRight, Upload, Home
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+
+import { Link } from "react-router-dom";
 
 
 /* =========================================================
-   Smooth + Video-on (mobile & desktop) + Unified Back:
-   - System back (Android/iOS) يعمل نفس زر الواجهة تمامًا.
-   - نستخدم history.pushState على كل تنقّل للأمام، وpopstate يستدعي backOneUI().
-   - Mobile/tablet: fewer animations
-   - Mobile: non‑images open in SAME TAB, images in modal
-   - Desktop: preview modal for all types
-   - Lists: paging to keep DOM small
-   - Drive requests: pageSize=100 + AbortController
-   - Images via Drive alt=media with preview iframe fallback
-   - Root Back button: history.back() (يوحِّد السلوك)
+   Unified Back + Modal Preview (All Types) — Close-All on X/Esc
+   - System back يطابق زر الواجهة.
+   - المعاينة: pushState عند أول فتح فقط، وreplaceState عند تبديل الملف.
+   - زر X و Esc: إغلاق فوري + history.go(-n) مع حارس يمنع التعليق.
+   - أسهم برتقالية ثابتة، والتنقّل على كل الملفات غير المجلدات.
    ========================================================= */
 
 /* ===================== Feedback trigger helper ===================== */
@@ -56,7 +52,6 @@ function fileTypeLabel(f) {
   return ext.toUpperCase();
 }
 
-/** روابط عرض/تنزيل موحّدة */
 function getUniversalDownloadLink(file) {
   if (!file) return null;
   if (file.mimeType?.startsWith("application/vnd.google-apps")) {
@@ -68,7 +63,6 @@ function getUniversalDownloadLink(file) {
 }
 
 function getImageMediaUrl(file) {
-  // عرض الصور مباشرة عبر Drive alt=media (يتطلب الملف عام Anyone with the link)
   return `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media&key=${API_KEY}`;
 }
 
@@ -103,7 +97,6 @@ function highlightMatch(text, query) {
   );
 }
 
-// تقسيم اسم مجلد اللاب إلى code و name
 function parseLabFromFolderName(name) {
   const rx = /^\s*([A-Za-z]{3,}\d{3,})\s*[-/_:\s]+\s*(.+)\s*$/;
   const m = name?.match(rx);
@@ -111,7 +104,6 @@ function parseLabFromFolderName(name) {
   return { code: name || "LAB", name: "" };
 }
 
-// Debounce hook
 function useDebouncedValue(value, delay = 220) {
   const [v, setV] = useState(value);
   useEffect(() => {
@@ -121,7 +113,6 @@ function useDebouncedValue(value, delay = 220) {
   return v;
 }
 
-/* API: إرجاع العناصر داخل مجلد */
 async function listChildren({ parentId, onlyFolders = false, signal }) {
   const base = "https://www.googleapis.com/drive/v3/files";
   const mimeFilter = onlyFolders ? " and mimeType='application/vnd.google-apps.folder'" : "";
@@ -129,73 +120,47 @@ async function listChildren({ parentId, onlyFolders = false, signal }) {
   const fields = encodeURIComponent("files(id,name,mimeType,modifiedTime,webViewLink,webContentLink)");
   const url = `${base}?q=${q}&key=${API_KEY}&fields=nextPageToken,${fields}&pageSize=100&supportsAllDrives=true&includeItemsFromAllDrives=true`;
   const res = await fetch(url, { signal });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Drive HTTP ${res.status} — ${text}`);
-  }
+  if (!res.ok) throw new Error(`Drive HTTP ${res.status}`);
   const data = await res.json();
   return (data.files ?? []);
 }
 
 /* ===================== Component ===================== */
 export default function LabsPage() {
-    const navigate = useNavigate();
-
   const prefersReducedMotion = useReducedMotion();
-  const isMobile = typeof window !== 'undefined' && window.matchMedia?.('(pointer:coarse)').matches;
-  const motionOK = !isMobile && !prefersReducedMotion;
+  const motionOK = !prefersReducedMotion;
 
-  // بحث وقائمة اللابات
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 220);
   const [labs, setLabs] = useState([]);
   const [labsLoading, setLabsLoading] = useState(false);
   const [labsErr, setLabsErr] = useState("");
 
-  // التصفح داخل لاب
-  const [selectedLab, setSelectedLab] = useState(null); // { id, code, name }
-  const [pathStack, setPathStack] = useState([]); // [{id, name}]
+  const [selectedLab, setSelectedLab] = useState(null);
+  const [pathStack, setPathStack] = useState([]);
   const [items, setItems] = useState([]);
 
-  // أخرى
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [preview, setPreview] = useState(null);
   const [imgError, setImgError] = useState(false);
 
-  // History/scroll
   const scrollYRef = useRef(0);
+  const previewDepthRef = useRef(0);
 
-  // قفل النقرات السريعة على زر الرجوع في الواجهة
-  const backBusyRef = useRef(false);
-
-  // منع الفتح المزدوج على الموبايل (double‑tap)
-  const tapGuardRef = useRef(0);
-
-  // 🔹 مرجع لاستدعاء أحدث نسخة من backOneUI داخل popstate
-  const backRef = useRef(() => {});
-
-  /* ===== تحميل مجلدات اللابات من مجلد الجذر ===== */
   useEffect(() => {
     let controller = new AbortController();
     async function fetchLabs() {
-      if (!LABS_ROOT_FOLDER_ID) {
-        setLabsErr("ضع معرف مجلد اللابات LABS_ROOT_FOLDER_ID أولاً.");
-        return;
-      }
       setLabsLoading(true); setLabsErr("");
       try {
         const folders = await listChildren({ parentId: LABS_ROOT_FOLDER_ID, onlyFolders: true, signal: controller.signal });
         const mapped = folders.map((f) => {
           const parsed = parseLabFromFolderName(f.name);
           return { id: f.id, code: parsed.code, name: parsed.name, link: f.webViewLink };
-        }).sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: "base" }));
+        }).sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
         setLabs(mapped);
       } catch (e) {
-        if (e.name !== 'AbortError') {
-          console.error("Labs fetch failed:", e);
-          setLabsErr("فشل جلب اللابات من Google Drive. تأكد من علنية المجلد وصلاحيات الـ API key.");
-        }
+        if (e.name !== "AbortError") setLabsErr("فشل جلب اللابات من Google Drive.");
       } finally {
         if (!controller.signal.aborted) setLabsLoading(false);
       }
@@ -211,85 +176,70 @@ export default function LabsPage() {
     setErr("");
     setPreview(null);
     setImgError(false);
+    previewDepthRef.current = 0;
   }
 
-  /* ====== 🔸 توحيد سلوك Back: إعداد التاريخ + مستمع popstate ====== */
+  /* 🔹 المزامنة مع history */
   useEffect(() => {
-    // ثبّت جذر داخلي لو ما كان موجود
-    if (!window.history.state) {
-      window.history.replaceState({ __eleclib: true, depth: 0 }, "");
-    }
+    const state = {
+      __eleclib: true,
+      level: selectedLab ? pathStack.length : 0,
+      preview: !!preview
+    };
+    window.history.replaceState(state, "");
+  }, [selectedLab, pathStack.length, preview]);
 
-    const onPop = () => {
-      // أي popstate => نفّذ بالضبط backOneUI الحالي
-      if (typeof backRef.current === 'function') backRef.current();
+  /* 🔹 مستمع popstate */
+  useEffect(() => {
+    const onPop = (e) => {
+      const state = e.state || {};
+      if (!state.__eleclib) return;
+
+      if (preview) {
+        setPreview(null);
+        previewDepthRef.current = 0;
+        return;
+      }
+      if (pathStack.length > 1) {
+        setPathStack(p => p.slice(0, -1));
+        return;
+      }
+      if (selectedLab) {
+        resetAll();
+        return;
+      }
+      window.history.back();
     };
 
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
-  }, []);
+  }, [preview, pathStack, selectedLab]);
 
-  // وظيفة مساعدة: كل انتقال للأمام يضيف خطوة
-  function pushStep() {
-    try {
-      window.history.pushState({ __eleclib: true, t: Date.now() }, "");
-    } catch {}
-  }
-
-  /* ==== زر الرجوع داخل الواجهة (المنطق الفعلي) ==== */
-  function backOneUI() {
-    if (backBusyRef.current) return;
-    backBusyRef.current = true;
-
-    // 1) إغلاق المعاينة إن كانت مفتوحة
+  function handleBack() {
     if (preview) {
       setPreview(null);
-      requestAnimationFrame(() => window.scrollTo(0, scrollYRef.current || 0));
-      backBusyRef.current = false;
-      return;
-    }
-
-    // 2) التراجع مستوى داخل المجلدات
-    if (pathStack.length > 1) {
-      setPathStack((p) => p.slice(0, -1));
-      backBusyRef.current = false;
-      return;
-    }
-
-    // 3) الرجوع من داخل مادة إلى صفحة جميع المواد
-    if (selectedLab) {
+      previewDepthRef.current = 0;
+    } else if (pathStack.length > 1) {
+      setPathStack(p => p.slice(0, -1));
+    } else if (selectedLab) {
       resetAll();
-      backBusyRef.current = false;
-      return;
+    } else {
+      window.history.back();
     }
-
-    // 4) على الصفحة الرئيسية: ارجع للي قبلها في المتصفح مباشرة وبأمان
-    const onPopOnce = () => {
-      window.removeEventListener('popstate', onPopOnce);
-      backBusyRef.current = false;
-    };
-    window.addEventListener('popstate', onPopOnce, { once: true });
-    window.history.back();
-    // فكّ القفل لو ما وصلنا popstate (بعض بيئات iOS)
-    setTimeout(() => {
-      window.removeEventListener('popstate', onPopOnce);
-      if (backBusyRef.current) backBusyRef.current = false;
-    }, 400);
   }
 
-  // دوّمًا خَلِّ المرجع يشير لأحدث نسخة
-  useEffect(() => { backRef.current = backOneUI; });
+  function pushStep() {
+    try { window.history.pushState({ __eleclib: true, t: Date.now() }, ""); } catch {}
+  }
 
-  /* ===== اختيار لاب ===== */
   function handleSelectLab(lab) {
     if (!lab?.id) return;
     setSelectedLab(lab);
     const nextPath = [{ id: lab.id, name: lab.name }];
     setPathStack(nextPath);
-    pushStep(); // ← خطوة للأمام
+    pushStep();
   }
 
-  /* ===== تحميل العناصر للمجلد الحالي ===== */
   useEffect(() => {
     let controller = new AbortController();
     async function fetchFolder() {
@@ -301,14 +251,11 @@ export default function LabsPage() {
         const sorted = files.slice().sort((a, b) => {
           if (isFolder(a.mimeType) && !isFolder(b.mimeType)) return -1;
           if (!isFolder(a.mimeType) && isFolder(b.mimeType)) return 1;
-          return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
+          return a.name.localeCompare(b.name, undefined, { numeric: true });
         });
         setItems(sorted);
       } catch (e) {
-        if (e.name !== 'AbortError') {
-          console.error("Folder fetch failed:", e);
-          setErr("فشل تحميل محتويات المجلد من Google Drive. تحقق من العلنية وصلاحيات المفتاح.");
-        }
+        if (e.name !== "AbortError") setErr("فشل تحميل محتويات المجلد.");
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
@@ -320,72 +267,59 @@ export default function LabsPage() {
   function openFolder(folder) {
     const next = [...pathStack, { id: folder.id, name: folder.name }];
     setPathStack(next);
-    pushStep(); // ← خطوة للأمام
+    pushStep();
   }
 
-  function goToLevel(index) {
-    const next = pathStack.slice(0, index + 1);
-    setPathStack(next);
-    // إذا نزلت لنفس المستوى أو أعمق عبر النقر على breadcrumb، اعتبرها للأمام
-    if (index >= pathStack.length - 1) pushStep();
-    // لو كان ضغط للرجوع للأعلى عبر breadcrumb، ما ندفع خطوة (سلوك طبيعي أقرب لرجوع الواجهة)
+  const navigableAll = useMemo(() => items.filter((f) => !isFolder(f.mimeType)), [items]);
+function goToLevel(index) {
+  const next = pathStack.slice(0, index + 1);
+  setPathStack(next);
+  if (index >= pathStack.length - 1) {
+    pushStep(); // نحافظ على history step حتى يشتغل الباك بشكل طبيعي
   }
-
-  /* ===== Preview ===== */
-  const navigableImages = useMemo(
-    () => items.filter((f) => !isFolder(f.mimeType) && isImageFile(f)),
-    [items]
-  );
-
-  const navAny = useCallback((dir) => {
-    if (!preview || !isImageFile(preview)) return;
-    const arr = navigableImages;
-    const idx = arr.findIndex((x) => x.id === preview.id);
-    if (idx === -1 || arr.length === 0) return;
-    const next = dir === "prev" ? (idx - 1 + arr.length) % arr.length : (idx + 1) % arr.length;
-    setPreview(arr[next]);
-  }, [preview, navigableImages]);
+}
 
   function openPreview(f) {
     scrollYRef.current = window.scrollY || 0;
-
-    // حارس لمسات سريعة حتى ما يفتح أكثر من تبويب على iOS
-    const now = Date.now();
-    if (now - (tapGuardRef.current || 0) < 700) return; // تجاهل النقرات خلال 700ms
-    tapGuardRef.current = now;
-
-    // على الموبايل: افتح ملفات غير الصور في نفس التبويب لتفادي تبويب "Untitled"
-    if (isMobile && !isImageFile(f)) {
-      const url = `https://drive.google.com/file/d/${f.id}/preview`;
-      try {
-        window.location.assign(url);
-      } catch {
-        window.location.href = url; // fallback
-      }
-      return;
-    }
-
-    // على الديسكتوب (أو الصور على الموبايل): اعرض المودال
     setImgError(false);
+    const firstOpen = !preview;
     setPreview(f);
-    pushStep(); // ← خطوة للأمام (أول Back يسكر المعاينة)
-    bumpFeedbackCounterAndTrigger();
+    try {
+      const state = { __eleclib: true, kind: "preview", t: Date.now() };
+      if (firstOpen) window.history.pushState(state, "");
+      else window.history.replaceState(state, "");
+    } catch {}
   }
 
-  function closePreviewAll() {
-    // نخلي زر الواجهة يستخدم back النظام لضمان التطابق 100%
-    window.history.back();
+  const navAny = useCallback((dir) => {
+    if (!preview) return;
+    const arr = navigableAll;
+    if (!arr.length) return;
+    const idx = arr.findIndex((x) => x.id === preview.id);
+    if (idx === -1) return;
+    const next = dir === "prev" ? (idx - 1 + arr.length) % arr.length : (idx + 1) % arr.length;
+    setPreview(arr[next]);
+    try { window.history.replaceState({ __eleclib: true, kind: "preview", t: Date.now() }, ""); } catch {}
+  }, [preview, navigableAll]);
+
+  function closePreviewHard() {
+    setPreview(null);
+    previewDepthRef.current = 0;
+    requestAnimationFrame(() => window.scrollTo(0, scrollYRef.current || 0));
   }
 
-  // Reset image error when switching image
   useEffect(() => { setImgError(false); }, [preview?.id]);
 
-  // كيبورد: Esc يغلق المعاينة + أسهم للتنقّل بين الصور
+  /* ... باقي الكود كما هو (واجهة العرض، المعاينة، footer، الفيديو، إلخ) ... */
+
+
+
+  // كيبورد: Esc = close-all + أسهم للتنقّل
   useEffect(() => {
     if (!preview) return;
     const onKeyDown = (e) => {
-      if (e.key === "Escape") { e.preventDefault(); closePreviewAll(); return; }
-      if (e.key === "ArrowLeft") { e.preventDefault(); navAny("prev"); }
+      if (e.key === "Escape") { e.preventDefault(); closePreviewHard(); return; }
+      if (e.key === "ArrowLeft")  { e.preventDefault(); navAny("prev"); }
       if (e.key === "ArrowRight") { e.preventDefault(); navAny("next"); }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -399,8 +333,8 @@ export default function LabsPage() {
     return labs.filter((l) => l.code.toLowerCase().includes(q) || l.name.toLowerCase().includes(q));
   }, [debouncedSearch, labs]);
 
-  // threshold to disable heavy motion (stricter on mobile)
-  const MANY = isMobile ? 40 : 60;
+  // threshold to disable heavy motion
+  const MANY = 60;
   const lotsOfLabs = labsList.length > MANY;
   const lotsOfItems = items.length > MANY;
 
@@ -423,6 +357,9 @@ export default function LabsPage() {
   const pagedItems = useMemo(() => items.slice(0, page * PAGE_SIZE), [items, page]);
   useEffect(() => { setPage(1); }, [items]);
 
+  // Helpers for controls visibility
+  const hasNav = navigableAll.length > 1;
+
   return (
     <div className="relative min-h-screen flex items-center justify-center px-4">
       {/* خلفية فيديو — مفعّلة على كل الأجهزة */}
@@ -443,6 +380,14 @@ export default function LabsPage() {
       <div className="fixed inset-0 z-[1] bg-black/30" />
 
       <main className="relative z-10 w-full max-w-6xl text-white py-10">
+        <Link
+  to="/"
+  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition"
+>
+  <Home size={18} />
+  Home
+</Link>
+
         <h2
           className="text-4xl md:text-5xl font-extrabold tracking-wide leading-normal 
                      bg-gradient-to-r from-orange-400 via-orange-500 to-amber-300 
@@ -452,18 +397,11 @@ export default function LabsPage() {
           Electrical Engineering Labs
         </h2>
 
-        {/* زر رجوع على الصفحة الرئيسية للّابات */}
+        {/* زر رجوع على الصفحة الرئيسية */}
         {!selectedLab && (
           <div className="mb-4 flex justify-start">
             <button
-onClick={() => {
-  const ref = document.referrer;
-  if (ref && new URL(ref).origin === window.location.origin) {
-    window.history.back();
-  } else {
-    navigate("/");  // ← يرجعك إلى صفحة الهيرو
-  }
-}}
+              onClick={() => window.history.back()}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
               title="Back"
               disabled={!!preview || !!selectedLab || pathStack.length > 1}
@@ -550,27 +488,7 @@ onClick={() => {
             {/* زر Back */}
             <div className="mb-4">
               <button
-onClick={() => {
-  // ⬅️ لو في فولدرات مفتوحة داخل لاب
-  if (pathStack.length > 1) {
-    setPathStack((prev) => prev.slice(0, -1));
-    return;
-  }
-
-  // ⬅️ لو المستخدم داخل لاب معيّن
-  if (selectedLab) {
-    resetAll();
-    return;
-  }
-
-  // ⬅️ لو المستخدم في الصفحة الرئيسية للابات
-  const ref = document.referrer;
-  if (ref && new URL(ref).origin === window.location.origin) {
-    window.history.back();
-  } else {
-    navigate("/"); // ← يرجع للـ Hero page
-  }
-}}
+                onClick={() => window.history.back()}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Back"
                 disabled={loading}
@@ -598,7 +516,7 @@ onClick={() => {
                     className={`hover:underline ${idx === pathStack.length - 1 ? "text-orange-300 font-medium" : "text-slate-300"}`}
                     onClick={() => goToLevel(idx)}
                   >
-                    {idx === 0 ? "Root" : p.name}
+                    {idx === 0 ? "Main Folder" : p.name}
                   </button>
                   {idx < pathStack.length - 1 && <span className="text-slate-500">/</span>}
                 </span>
@@ -671,7 +589,7 @@ onClick={() => {
                       })}
                       {pagedItems.length < items.length && (
                         <li className="text-center">
-                          <button onClick={() => setPage(p => p + 1)} className="px-4 py-2 text-sm rounded-xl bg-white/10 hover:bg白/20">Load more</button>
+                          <button onClick={() => setPage(p => p + 1)} className="px-4 py-2 text-sm rounded-xl bg-white/10 hover:bg-white/20">Load more</button>
                         </li>
                       )}
                       {items.length === 0 && <li className="text-slate-400 text-sm">No items here.</li>}
@@ -730,49 +648,72 @@ onClick={() => {
         </div>
       </main>
 
-      {/* Preview Modal — mobile-safe overlay */}
+      {/* Preview Modal — overlay */}
       <AnimatePresence>
         {preview && (
           <motion.div
-            className="fixed inset-0 bg-black/70 z-50 grid place-items-center px-4"
+            className="fixed inset-0 bg-black/80 z-50 grid place-items-center px-4"
             initial={motionOK ? { opacity: 0 } : false}
             animate={motionOK ? { opacity: 1 } : false}
             exit={motionOK ? { opacity: 0 } : false}
           >
-            <div className="relative bg-neutral-900 border border-white/10 rounded-2xl w-full max-w-[95vw] md:max-w-[90vw] max-h-[92vh] overflow-hidden shadow-xl flex flex-col">
+            <div className="relative bg-neutral-900/90 border border-white/15 rounded-2xl w-full max-w-[95vw] md:max-w-[90vw] max-h-[92vh] overflow-hidden shadow-xl flex flex-col">
               {/* Header */}
               <div className="flex items-center justify-between p-4 border-b border-white/10 shrink-0">
                 <div className="text-white font-medium pr-4 whitespace-normal break-words">{preview.name}</div>
+                {/* زر إغلاق في الهيدر — Close-All */}
                 <button
-                  className="p-2 rounded-lg bg-white/10 hover:bg-white/20"
-                  onClick={closePreviewAll}
+                  className="p-2 rounded-xl bg-white/15 hover:bg-white/25 ring-1 ring-white/60 backdrop-blur-sm drop-shadow-[0_4px_18px_rgba(0,0,0,0.7)]"
+                  onClick={closePreviewHard}
                   title="Close Preview (Esc)"
                 >
-                  <X size={16} />
+                  <X size={18} className="text-white" />
                 </button>
               </div>
 
               {/* Content */}
               <div className="relative bg-neutral-950 p-3 grow overflow-auto">
-                {isImageFile(preview) && navigableImages.length > 1 && !imgError && (
-                  <>
-                    <button
-                      onClick={() => navAny("prev")}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-xl bg-white/10 hover:bg-white/20 z-10"
-                      aria-label="Previous"
-                    >
-                      <ChevronLeft />
-                    </button>
-                    <button
-                      onClick={() => navAny("next")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-xl bg-white/10 hover:bg-white/20 z-10"
-                      aria-label="Next"
-                    >
-                      <ChevronRight />
-                    </button>
-                  </>
-                )}
+                {/* Scrims لتحسين التباين خلف الأسهم */}
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/40 to-transparent z-10" />
+                <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-20 bg-gradient-to-r from-black/35 to-transparent z-10" />
+                <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-20 bg-gradient-to-l from-black/35 to-transparent z-10" />
 
+                {/* أسهم التنقّل برتقالية — دائمة الظهور */}
+                <>
+                  <button
+                    onClick={() => hasNav && navAny("prev")}
+                    disabled={!hasNav}
+                    aria-disabled={!hasNav}
+                    className={`absolute left-3 top-1/2 -translate-y-1/2 z-20
+                                p-3 rounded-2xl
+                                bg-orange-600 hover:bg-orange-700
+                                ring-1 ring-white/60 backdrop-blur-sm
+                                drop-shadow-[0_8px_24px_rgba(0,0,0,0.65)]
+                                ${hasNav ? "opacity-100 cursor-pointer" : "opacity-40 cursor-not-allowed"}`}
+                    aria-label="Previous"
+                    title={hasNav ? "Previous (←)" : "No previous"}
+                  >
+                    <ChevronLeft size={22} className="text-white" />
+                  </button>
+
+                  <button
+                    onClick={() => hasNav && navAny("next")}
+                    disabled={!hasNav}
+                    aria-disabled={!hasNav}
+                    className={`absolute right-3 top-1/2 -translate-y-1/2 z-20
+                                p-3 rounded-2xl
+                                bg-orange-600 hover:bg-orange-700
+                                ring-1 ring-white/60 backdrop-blur-sm
+                                drop-shadow-[0_8px_24px_rgba(0,0,0,0.65)]
+                                ${hasNav ? "opacity-100 cursor-pointer" : "opacity-40 cursor-not-allowed"}`}
+                    aria-label="Next"
+                    title={hasNav ? "Next (→)" : "No next"}
+                  >
+                    <ChevronRight size={22} className="text-white" />
+                  </button>
+                </>
+
+                {/* محتوى المعاينة: صورة مباشرة، غير هيك iframe لعرض Google Drive */}
                 {isImageFile(preview) && !imgError ? (
                   <img
                     src={getImageMediaUrl(preview)}

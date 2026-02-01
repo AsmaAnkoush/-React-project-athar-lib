@@ -1,13 +1,6 @@
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import {
-  Folder,
-  File,
-  Search,
-  ChevronLeft,
-  X,
-  Download,
-} from "lucide-react";
+import { Folder, File, Search, ChevronLeft, X, Download } from "lucide-react";
 
 const API_KEY = "AIzaSyCboKI_SgpSYo9ljw__npVNEFbjbFTUPcM";
 
@@ -36,18 +29,17 @@ export default function FolderView({ folderId }) {
   const isFolder = (mime) => mime === "application/vnd.google-apps.folder";
 
   async function loadFolderName(id) {
-    const url =
-      `https://www.googleapis.com/drive/v3/files/${id}?fields=id,name&key=${API_KEY}`;
+    const url = `https://www.googleapis.com/drive/v3/files/${id}?fields=id,name&key=${API_KEY}`;
     const res = await fetch(url);
     const data = await res.json();
     setRootFolderName(data.name || "");
   }
 
-  async function loadItems(folderId) {
+  async function loadItems(id) {
     setLoading(true);
 
     const url =
-      `https://www.googleapis.com/drive/v3/files?q='${folderId}' in parents and trashed=false` +
+      `https://www.googleapis.com/drive/v3/files?q='${id}' in parents and trashed=false` +
       `&key=${API_KEY}&fields=files(id,name,mimeType)` +
       `&supportsAllDrives=true&includeItemsFromAllDrives=true`;
 
@@ -61,9 +53,11 @@ export default function FolderView({ folderId }) {
   useEffect(() => {
     if (!finalFolderId) return;
 
+    // نخلي الـ breadcrumb يبدأ من الروت
+    setPathStack([{ id: finalFolderId, name: "الرئيسية" }]);
+
     loadFolderName(finalFolderId);
     loadItems(finalFolderId);
-
   }, [finalFolderId]);
 
   function goBack() {
@@ -207,9 +201,10 @@ export default function FolderView({ folderId }) {
       {/* ------- PREVIEW ------- */}
       {preview && (
         <div className="fixed inset-0 bg-black/50 z-50 grid place-items-center p-4">
-          <div className="bg-white border border-[#ddd] rounded-2xl w-full max-w-3xl
-                          overflow-hidden shadow-xl flex flex-col">
-
+          <div
+            className="bg-white border border-[#ddd] rounded-2xl w-full max-w-3xl
+                          overflow-hidden shadow-xl flex flex-col"
+          >
             <div className="flex justify-between items-center px-4 py-3 border-b border-[#eee]">
               <p className="text-[#111] font-medium">{preview.name}</p>
               <button
@@ -221,14 +216,16 @@ export default function FolderView({ folderId }) {
             </div>
 
             <div className="p-3 bg-[#fafafa] max-h-[70vh] overflow-auto">
-              {preview.mimeType.startsWith("image/") && !imgError ? (
+              {preview.mimeType?.startsWith("image/") && !imgError ? (
                 <img
                   src={getMediaURL(preview)}
+                  alt={preview.name || "Preview image"}
                   className="w-full max-h-[65vh] object-contain rounded-xl"
                   onError={() => setImgError(true)}
                 />
               ) : (
                 <iframe
+                  title={`Preview - ${preview.name || "file"}`}
                   src={getPreviewURL(preview)}
                   className="w-full h-[65vh] rounded-xl"
                 />
@@ -239,12 +236,12 @@ export default function FolderView({ folderId }) {
               <a
                 href={getDownloadURL(preview)}
                 target="_blank"
+                rel="noreferrer noopener"
                 className="px-4 py-2 bg-[#2F80FF] hover:bg-[#1f6fe0] rounded-xl text-sm text-white flex items-center gap-2"
               >
                 <Download size={16} /> تحميل
               </a>
             </div>
-
           </div>
         </div>
       )}

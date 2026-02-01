@@ -3,10 +3,10 @@ import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import {
   FolderOpen, File, FileText, FileCode, Image as ImageIcon,
   FileArchive, FileSpreadsheet, FileAudio2, FileVideo2, Presentation,
-  X, Zap, ChevronLeft, ChevronRight, Upload
+  X, Zap, ChevronLeft, ChevronRight, Upload, Home
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 
+import { Link } from "react-router-dom";
 
 /* =========================================================
    AllSubjects — Unified Back Behavior (System = UI)
@@ -129,8 +129,6 @@ async function listChildren({ parentId, onlyFolders = false, signal }) {
 
 /* ===================== Component ===================== */
 export default function AllSubjects() {
-  const navigate = useNavigate();
-
   const prefersReducedMotion = useReducedMotion();
   const isMobile = typeof window !== 'undefined' && window.matchMedia?.('(pointer:coarse)').matches;
   const motionOK = !isMobile && !prefersReducedMotion;
@@ -308,44 +306,57 @@ export default function AllSubjects() {
     if (index >= pathStack.length - 1) pushStep();
   }
 
-  /* ===== Preview ===== */
-  const navigableImages = useMemo(
-    () => items.filter((f) => !isFolder(f.mimeType) && isImageFile(f)),
+  /* ===== Preview (عدّلنا هنا) ===== */
+  // ⬅️ تنقّل بين جميع الملفات غير المجلدات (PDF/Word/صور/فيديو…)
+  const navigableAll = useMemo(
+    () => items.filter((f) => !isFolder(f.mimeType)),
     [items]
   );
+  const hasNav = navigableAll.length > 1;
 
   const navAny = useCallback((dir) => {
-    if (!preview || !isImageFile(preview)) return;
-    const arr = navigableImages;
+    if (!preview) return;
+    const arr = navigableAll;
     const idx = arr.findIndex((x) => x.id === preview.id);
     if (idx === -1 || arr.length === 0) return;
     const next = dir === "prev" ? (idx - 1 + arr.length) % arr.length : (idx + 1) % arr.length;
-    setPreview(arr[next]);
-  }, [preview, navigableImages]);
+    setPreview(arr[next]); // لا يغيّر history
+  }, [preview, navigableAll]);
 
   function openPreview(f) {
-    scrollYRef.current = window.scrollY || 0;
+  if (!f) return;
 
-    const now = Date.now();
-    if (now - (tapGuardRef.current || 0) < 700) return;
-    tapGuardRef.current = now;
+  // خزّن موضع التمرير الحالي
+  scrollYRef.current = window.scrollY || 0;
+  setImgError(false);
 
-    if (isMobile && !isImageFile(f)) {
-      const url = `https://drive.google.com/file/d/${f.id}/preview`;
-      try { window.location.assign(url); } catch { window.location.href = url; }
-      return;
-    }
+  // افتح المعاينة فورًا (بدون أي تأخير)
+  setPreview(f);
+  bumpFeedbackCounterAndTrigger();
 
-    setImgError(false);
-    setPreview(f);
-    pushStep(); // أول Back يسكر المعاينة
-    bumpFeedbackCounterAndTrigger();
+  // أضف خطوة في السجل للرجوع (Back)
+  try {
+    window.history.pushState(
+      { __eleclib: true, kind: "preview", t: Date.now() },
+      ""
+    );
+  } catch {}
+}
+
+function closePreviewAll() {
+  // إذا في معاينة مفتوحة، أغلقها فورًا
+  if (preview) {
+    setPreview(null);
+    requestAnimationFrame(() =>
+      window.scrollTo(0, scrollYRef.current || 0)
+    );
+    return;
   }
 
-  function closePreviewAll() {
-    // الزر الداخلي يستدعي Back النظام لتوحيد السلوك 100%
-    window.history.back();
-  }
+  // رجوع عادي لباقي الحالات
+  window.history.back();
+}
+
 
   useEffect(() => { setImgError(false); }, [preview?.id]);
 
@@ -353,7 +364,7 @@ export default function AllSubjects() {
     if (!preview) return;
     const onKeyDown = (e) => {
       if (e.key === "Escape") { e.preventDefault(); closePreviewAll(); return; }
-      if (e.key === "ArrowLeft") { e.preventDefault(); navAny("prev"); }
+      if (e.key === "ArrowLeft")  { e.preventDefault(); navAny("prev"); }
       if (e.key === "ArrowRight") { e.preventDefault(); navAny("next"); }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -408,6 +419,14 @@ export default function AllSubjects() {
       <div className="fixed inset-0 z-[1] bg-black/30" />
 
       <main className="relative z-10 w-full max-w-6xl text-white py-10">
+        <Link
+  to="/"
+  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition"
+>
+  <Home size={18} />
+  Home
+</Link>
+
         <h2
           className="text-4xl md:text-5xl font-extrabold tracking-wide leading-normal 
                      bg-gradient-to-r from-orange-400 via-orange-500 to-amber-300 
@@ -421,14 +440,7 @@ export default function AllSubjects() {
         {!selectedCourse && (
           <div className="mb-4 flex justify-start">
             <button
-onClick={() => {
-  const ref = document.referrer;
-  if (ref && new URL(ref).origin === window.location.origin) {
-    window.history.back();
-  } else {
-    navigate("/"); // ← يرجعك إلى صفحة الهيرو
-  }
-}}
+              onClick={() => window.history.back()} // توحيد السلوك
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
               title="Back"
               disabled={!!preview || !!selectedCourse || pathStack.length > 1}
@@ -515,27 +527,7 @@ onClick={() => {
             {/* زر Back */}
             <div className="mb-4">
               <button
-onClick={() => {
-  // لو في فولدرات مفتوحة
-  if (pathStack.length > 1) {
-    setPathStack((prev) => prev.slice(0, -1));
-    return;
-  }
-
-  // لو داخل مادة
-  if (selectedCourse) {
-    resetAll();
-    return;
-  }
-
-  // لو في الصفحة الرئيسية للمواد → ارجع إلى الهيرو
-  const ref = document.referrer;
-  if (ref && new URL(ref).origin === window.location.origin) {
-    window.history.back();
-  } else {
-    navigate("/");
-  }
-}}
+                onClick={() => window.history.back()} // توحيد السلوك
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Back"
                 disabled={loading}
@@ -563,7 +555,7 @@ onClick={() => {
                     className={`hover:underline ${idx === pathStack.length - 1 ? "text-orange-300 font-medium" : "text-slate-300"}`}
                     onClick={() => goToLevel(idx)}
                   >
-                    {idx === 0 ? "Root" : p.name}
+                    {idx === 0 ? "Main Folder" : p.name}
                   </button>
                   {idx < pathStack.length - 1 && <span className="text-slate-500">/</span>}
                 </span>
@@ -708,32 +700,36 @@ onClick={() => {
               {/* Header */}
               <div className="flex items-center justify-between p-4 border-b border-white/10 shrink-0">
                 <div className="text-white font-medium pr-4 whitespace-normal break-words">{preview.name}</div>
+                {/* X أوضح */}
                 <button
-                  className="p-2 rounded-lg bg-white/10 hover:bg-white/20"
+                  className="p-2 rounded-xl bg-orange-600 hover:bg-orange-700 ring-1 ring-white/60 text-white"
                   onClick={closePreviewAll}
                   title="Close Preview (Esc)"
                 >
-                  <X size={16} />
+                  <X size={18} />
                 </button>
               </div>
 
               {/* Content */}
               <div className="relative bg-neutral-950 p-3 grow overflow-auto">
-                {isImageFile(preview) && navigableImages.length > 1 && !imgError && (
+                {/* أسهم تنقّل — تظهر فقط إذا في أكثر من ملف */}
+                {hasNav && (
                   <>
                     <button
                       onClick={() => navAny("prev")}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-xl bg-white/10 hover:bg-white/20 z-10"
+                      className="absolute left-3 top-1/2 -translate-y-1/2 p-3 rounded-2xl bg-orange-600 hover:bg-orange-700 ring-1 ring-white/60 z-10"
                       aria-label="Previous"
+                      title="Previous (←)"
                     >
-                      <ChevronLeft />
+                      <ChevronLeft className="text-white" />
                     </button>
                     <button
                       onClick={() => navAny("next")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-xl bg-white/10 hover:bg-white/20 z-10"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-3 rounded-2xl bg-orange-600 hover:bg-orange-700 ring-1 ring-white/60 z-10"
                       aria-label="Next"
+                      title="Next (→)"
                     >
-                      <ChevronRight />
+                      <ChevronRight className="text-white" />
                     </button>
                   </>
                 )}
