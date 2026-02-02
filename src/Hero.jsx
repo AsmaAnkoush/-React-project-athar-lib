@@ -88,14 +88,7 @@ export default function Hero() {
       مواد أخرى
     </Link>
 
-    <Link
-      to="/links"
-      className="inline-block font-semibold text-lg px-10 py-3 rounded-full 
-                 border border-[#2f80ff] text-[#2f80ff] transition-all duration-300 
-                 hover:bg-[#2f80ff] hover:text-white hover:scale-105 shadow-md"
-    >
-      روابط مساعدة
-    </Link>
+   
   </motion.div>
 
   {/* 🪶 العبارة الختامية */}
